@@ -1,0 +1,26 @@
+# File: Dockerfile.backup
+# Automated backup container
+FROM alpine:latest
+
+RUN apk add --no-cache \
+    bash \
+    postgresql-client \
+    redis \
+    curl \
+    aws-cli \
+    rclone \
+    dcron \
+    tzdata \
+    tar \
+    gzip \
+    git
+
+COPY scripts/backup /usr/local/bin/
+RUN chmod +x /usr/local/bin/backup/*
+
+WORKDIR /backups
+
+# Setup cron
+RUN echo "0 2 * * * /usr/local/bin/backup/run-all.sh >> /var/log/backup/backup.log 2>&1" > /etc/crontabs/root
+
+CMD ["crond", "-f", "-l", "2"]
