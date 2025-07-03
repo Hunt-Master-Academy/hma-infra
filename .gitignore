@@ -1,0 +1,8 @@
+.env
+data/
+backups/
+logs/
+reports/
+*.log
+*.tmp
+*.bak
