@@ -15,7 +15,7 @@ RUN apk add --no-cache \
     gzip \
     git
 
-COPY scripts/backup /usr/local/bin/
+COPY scripts/backup /usr/local/bin/backup/
 RUN chmod +x /usr/local/bin/backup/*
 
 WORKDIR /backups
