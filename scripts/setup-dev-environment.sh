@@ -15,12 +15,15 @@ check_requirements() {
     fi
     echo "✅ Docker installed"
     
-    # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null; then
-        echo "❌ Docker Compose is not installed. Please install Docker Compose first."
-        exit 1
-    fi
-    echo "✅ Docker Compose installed"
+        # Check Docker Compose (prefer v2 `docker compose`, fallback to legacy `docker-compose`)
+        if docker compose version >/dev/null 2>&1; then
+            echo "✅ Docker Compose v2 available"
+        elif command -v docker-compose >/dev/null 2>&1; then
+            echo "ℹ️  Using legacy docker-compose binary"
+        else
+            echo "❌ Docker Compose not found. Install Docker Compose v2 (docker compose) or legacy docker-compose."
+            exit 1
+        fi
     
     # Check available disk space (require at least 10GB)
     available_space=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
@@ -158,7 +161,7 @@ main() {
     echo "  3. Start development server: npm run dev"
     echo ""
     echo "🛑 To stop services: docker-compose down"
-    echo "🗑️  To reset everything: docker-compose down -v"
+        echo "🗑️  To reset everything: docker compose -f docker/docker-compose.yml down -v"
 }
 
 # Run main function
