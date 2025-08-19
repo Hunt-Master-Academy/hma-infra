@@ -3,13 +3,39 @@ name: CI (infra)
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'docker/**'
+      - 'database/**'
+      - 'scripts/**'
+      - 'ml-server/**'
+      - '.github/workflows/ci.yml'
+      - 'README.md'
   pull_request:
     branches: [ main ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
+    paths:
+      - 'docker/**'
+      - 'database/**'
+      - 'scripts/**'
+      - 'ml-server/**'
+      - '.github/workflows/ci.yml'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Ensure only one run per branch/PR is active; cancel older in-progress runs
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-infra:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Skip CI for draft PRs to save minutes
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
