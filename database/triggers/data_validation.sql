@@ -1,0 +1,2 @@
+-- Data integrity checks (stub)
+-- Add validation triggers here
