@@ -1,0 +1,84 @@
+name: CI (infra)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker info
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Compose config (lint)
+        run: docker compose -f docker/docker-compose.yml config
+
+      - name: Bring up stack with setup script (with timeout)
+        run: timeout 300s bash scripts/setup-dev-environment.sh
+
+      - name: Smoke test (with timeout)
+        run: timeout 120s ./scripts/smoke-test.sh
+
+      - name: Migration status (with timeout)
+        run: timeout 120s ./scripts/migrate.sh status
+
+      - name: Apply migrations (with timeout)
+        run: timeout 180s ./scripts/migrate.sh apply
+
+      - name: Seed test users (with timeout)
+        run: timeout 120s ./scripts/seed.sh --test-users
+
+      - name: Verify Redis ping (with timeout)
+        run: |
+          export REDIS_PASSWORD=$(grep '^REDIS_PASSWORD=' .env | cut -d '=' -f2)
+          timeout 60s docker compose -f docker/docker-compose.yml exec -T redis redis-cli -a "$REDIS_PASSWORD" ping | grep -q PONG
+
+      - name: Verify MinIO health (with timeout)
+        run: timeout 60s curl -fsS http://localhost:9000/minio/health/live >/dev/null
+
+      - name: Verify migration tracking table (with timeout)
+        run: |
+          timeout 60s docker compose -f docker/docker-compose.yml exec -T postgres \
+            psql -U hma_admin -d huntmaster -tAc "SELECT to_regclass('infra.schema_migrations') IS NOT NULL;" | grep -q t
+
+      - name: Verify required migrations applied (with timeout)
+        run: |
+          timeout 60s docker compose -f docker/docker-compose.yml exec -T postgres \
+            psql -U hma_admin -d huntmaster -tAc "SELECT COUNT(*) FROM infra.schema_migrations WHERE version IN ('V0001__create_schema_migrations.sql','V0002__auth_core.sql');" | grep -q '^2$'
+
+      - name: Verify age gate constraint present (with timeout)
+        run: |
+          timeout 60s docker compose -f docker/docker-compose.yml exec -T postgres \
+            psql -U hma_admin -d huntmaster -tAc "SELECT COUNT(*) FROM pg_constraint WHERE conname='users_age_18_check' AND conrelid = 'auth.users'::regclass;" | grep -q '^1$'
+
+      - name: Verify seeded user exists (with timeout)
+        run: |
+          timeout 60s docker compose -f docker/docker-compose.yml exec -T postgres \
+            psql -U hma_admin -d huntmaster -tAc "SELECT COUNT(*) FROM auth.users WHERE email='adult1@example.com';" | grep -q '^[1-9]'
+
+      - name: Capture migration status and compose ps
+        run: |
+          set -e
+          ./scripts/migrate.sh status | tee ci-migration-status.txt
+          docker compose -f docker/docker-compose.yml ps | tee ci-compose-ps.txt
+
+      - name: Upload CI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: infra-ci-artifacts
+          path: |
+            ci-migration-status.txt
+            ci-compose-ps.txt
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker/docker-compose.yml down -v
