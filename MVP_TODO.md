@@ -171,3 +171,76 @@ Legend: [x] Done • [~] In Progress • [ ] TODO • (Optional) Nice-to-have fo
 
 - TimescaleDB/pgvector are optional for MVP; add when needed by features. If adopting, prefer an image that bundles the extension or a build step to install.
 - Production Kubernetes specifics live in `hma-deployment`; this repo focuses on local/dev parity and DB schema ownership.
+
+---
+
+## Alpha Readiness Epics & Workstreams
+
+This section captures the parallel work needed to reach alpha-testing readiness. Keep epic/task status updated here; no external project board is required. Suggested branch prefix: `ws/<workstream>/<short-topic>`.
+
+Legend: Workstreams — A: Compose/Local Infra, B: Database/Migrations, C: Security/Compliance, D: CI/CD, E: Observability, F: ML Server, G: Backups/DR, H: Docs/DX.
+
+### EPIC A1 – Compose Hardening (Workstream A)
+Goals: Clean Compose v2 config, reliable bring-up, documented variants.
+- [ ] A1.1 Remove deprecated `version:` key; validate config clean
+- [ ] A1.2 Document dev/test/prod deltas in README; include ports/resources
+- [ ] A1.3 Verify MinIO bucket creation uses the correct network name
+Acceptance: `docker compose -f docker/docker-compose.yml config` has no warnings; setup script succeeds end-to-end on a clean machine.
+
+### EPIC B1 – Auth Core Migrations (Workstream B)
+Goals: Baseline auth schema with partitions and triggers.
+- [ ] B1.1 Users, sessions, legal_acceptance tables with constraints and indexes
+- [ ] B1.2 Partitioned `auth.audit_log` with current-month partition helper
+- [ ] B1.3 `updated_at` trigger + audit triggers wired on auth tables
+- [ ] B1.4 Seed test users; idempotent seeds and fixture refresh
+Acceptance: `./scripts/migrate.sh apply` idempotent; under-18 insert fails; audit rows route to current month partition.
+
+### EPIC B2 – RLS & Roles (Workstream B/C)
+Goals: Least-privilege access and baseline RLS.
+- [ ] B2.1 Default privileges per schema for `hma_app` and `analytics_reader`
+- [ ] B2.2 Enable RLS on sensitive `auth.*` tables (owner-only baseline)
+- [ ] B2.3 Role grant verification script or doc (connectivity matrix)
+Acceptance: `hma_app` can SELECT/INSERT where allowed; `analytics_reader` SELECT-only in analytics; unauthorized access denied.
+
+### EPIC C1 – Compliance Guardrails (Workstream C)
+Goals: Enforce age gate and log denied registrations.
+- [ ] C1.1 CHECK constraint for 18+ on `auth.users.birth_date`
+- [ ] C1.2 Rejection path writes to `auth.audit_log` with reason and context
+Acceptance: Inserting underage user fails with clear error and audit trail.
+
+### EPIC D1 – CI Quality Gates (Workstream D)
+Goals: Run-on-demand CI with timeouts and linters.
+- [ ] D1.1 Add shellcheck for scripts (gated)
+- [ ] D1.2 Add SQL lint or parse check (sqlfluff or `psql -c "EXPLAIN ..."` dry parses)
+- [ ] D1.3 Keep current gates: alpha tags/manual/PR label + concurrency + path filters
+Acceptance: CI passes when gated; all steps have explicit timeouts.
+
+### EPIC E1 – Observability Bootstrap (Workstream E)
+Goals: Troubleshooting visibility; optional Prometheus.
+- [ ] E1.1 Ensure db-stats/slow-queries/cache-stats scripts document outputs
+- [ ] E1.2 Optional: Add Prometheus + Postgres exporter compose and README notes
+Acceptance: Scripts run with timeouts; optional stack scrapes metrics locally.
+
+### EPIC F1 – ML Contract Baseline (Workstream F)
+Goals: Minimal API and smoke coverage.
+- [ ] F1.1 `/health` returns service/version; `/models` lists registry contents
+- [ ] F1.2 Add smoke test script step for ML endpoints (timeout-protected)
+Acceptance: Smoke step asserts 200 responses and basic payload contract.
+
+### EPIC G1 – Scheduled Backups & Restore Test (Workstream G)
+Goals: Daily backups with retention; restore confidence.
+- [ ] G1.1 Add daily backup job (cron/compose) writing to `database/backups/`
+- [ ] G1.2 Retention pruning (e.g., keep 7-14 days)
+- [ ] G1.3 Automated restore test script for a fresh DB snapshot
+Acceptance: Restore test passes; backup size/rotation documented.
+
+### EPIC H1 – Docs & Onboarding (Workstream H)
+Goals: Clear onboarding and runbooks.
+- [ ] H1.1 Onboarding runbook: setup, common ops, smoke
+- [ ] H1.2 Recovery drills: backup/restore walkthrough, failure scenarios
+Acceptance: New dev can bring up stack in <10 minutes using docs.
+
+Coordination Notes
+- Prefer small PRs per sub-task; reference the EPIC code (e.g., A1.1)
+- Always run local smoke with timeouts before pushing
+- Keep this section as the single source of truth for epic/task status
