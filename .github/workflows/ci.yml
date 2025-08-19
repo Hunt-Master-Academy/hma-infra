@@ -1,8 +1,10 @@
 name: CI (infra)
 
 on:
+  # Only run automatically for alpha tags (lightweight gate)
   push:
-    branches: [ main ]
+    tags:
+      - 'alpha-*'
     paths:
       - 'docker/**'
       - 'database/**'
@@ -10,9 +12,10 @@ on:
       - 'ml-server/**'
       - '.github/workflows/ci.yml'
       - 'README.md'
+  # PRs to main only run if explicitly labeled (job-level if enforces)
   pull_request:
     branches: [ main ]
-    types: [ opened, synchronize, reopened, ready_for_review ]
+    types: [ opened, synchronize, reopened, ready_for_review, labeled ]
     paths:
       - 'docker/**'
       - 'database/**'
@@ -20,7 +23,13 @@ on:
       - 'ml-server/**'
       - '.github/workflows/ci.yml'
       - 'README.md'
+  # Allow maintainers to trigger manually
   workflow_dispatch:
+    inputs:
+      run_ci:
+        description: 'Run full infra CI'
+        required: false
+        default: 'false'
 
 permissions:
   contents: read
@@ -34,8 +43,14 @@ jobs:
   validate-infra:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Skip CI for draft PRs to save minutes
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Gate conditions to save minutes:
+    # - Allow manual workflow_dispatch when input run_ci=true
+    # - Allow pushes to alpha-* tags
+    # - Allow PRs only when labeled 'alpha-ci' and not draft
+    if: |
+      (github.event_name == 'workflow_dispatch' && (inputs.run_ci == 'true' || inputs.run_ci == true)) ||
+      startsWith(github.ref, 'refs/tags/alpha-') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false && contains(toJson(github.event.pull_request.labels), 'alpha-ci'))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
