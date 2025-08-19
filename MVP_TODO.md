@@ -140,7 +140,7 @@ Legend: [x] Done • [~] In Progress • [ ] TODO • (Optional) Nice-to-have fo
 - [x] Comprehensive README covering architecture, ops, compliance, and troubleshooting.
 - [x] Docs stubs: `docs/database-design.md`, `docs/compliance-strategy.md`, `docs/scaling-strategy.md`, `docs/backup-recovery.md`.
 - [ ] Keep README in sync with compose filenames and commands (compose v2 syntax).
-- [ ] Add `MVP_TODO.md` link to README (Optional nicety).
+ - [x] Add `MVP_TODO.md` link to README (Optional nicety).
 - [ ] Add runbooks: onboarding, common ops, recovery drills (Optional).
 
 ## 13) Environments & Config

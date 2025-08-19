@@ -16,6 +16,7 @@
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [Related Repositories](#related-repositories)
+- [Roadmaps & Workstreams](#roadmaps--workstreams)
 
 ## Overview
 
@@ -407,6 +408,11 @@ rm -rf database/backups/backup_*.sql
 ## For AI assistants
 
 - See `.github/copilot-instructions.md` for repo-specific guidance (architecture, workflows, conventions, gotchas). Ensure any tests or scripts you run use a timeout (e.g., `timeout 60s <cmd>`).
+
+## Roadmaps & Workstreams
+
+- MVP goals and acceptance criteria: see `MVP_TODO.md`.
+- Parallel team plan (epics and tasks): see `WORKSTREAMS.md`.
 
 ## License
 
