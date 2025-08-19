@@ -387,9 +387,11 @@ rm -rf database/backups/backup_*.sql
 |------------|---------|
 | [hma-academy-brain](../hma-academy-brain) | Academy orchestrator service |
 | [hma-gamecalls-engine](../hma-gamecalls-engine) | Game calls processing engine |
-| [hma-strategy-engine](../hma-strategy-engine) | Hunt strategy AI service |
+| [hma-hunt-strategy-engine](../hma-hunt-strategy-engine) | Hunt strategy AI service |
 | [hma-common-libs](../hma-common-libs) | Shared TypeScript types |
 | [hma-deployment](../hma-deployment) | Production deployment configs |
+| [hma-ai-models](../hma-ai-models) | Model artifacts, validation, benchmarks |
+| [hma-content](../hma-content) | Curriculum/content and data policies |
 
 ## Monitoring & Observability
 
