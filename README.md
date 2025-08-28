@@ -128,6 +128,25 @@ bash scripts/setup-dev-environment.sh
 
 # Verify all services are healthy
 docker compose -f docker/docker-compose.yml ps
+
+### 1.1 Load Demo Data (optional)
+
+To load sample users, content, progress, and ML models for local testing:
+
+```bash
+./scripts/seed.sh database/seeds/05_demo_data.sql
+```
+
+Verify data exists:
+
+```bash
+docker compose -f docker/docker-compose.yml exec -T postgres psql -U hma_admin -d huntmaster -c "
+SELECT 'auth.users' AS table, COUNT(*) FROM auth.users;
+SELECT 'users.profiles' AS table, COUNT(*) FROM users.profiles;
+SELECT 'content.items' AS table, COUNT(*) FROM content.items;
+SELECT 'progress.user_progress' AS table, COUNT(*) FROM progress.user_progress;
+SELECT 'ml_infrastructure.model_registry' AS table, COUNT(*) FROM ml_infrastructure.model_registry;"
+```
 ```
 
 ### 2. Environment Variables
@@ -164,6 +183,7 @@ LOG_LEVEL=debug
 | Adminer | `http://localhost:8080` | Use PostgreSQL credentials |
 | Redis Commander | `http://localhost:8081` | No auth in dev |
 | ML Server | `http://localhost:8010` | API Key: from `.env` |
+| Content Bridge | `http://localhost:8090` | N/A |
 
 ## Database Management
 
@@ -188,6 +208,9 @@ LOG_LEVEL=debug
 
 # Load specific seed file
 ./scripts/seed.sh database/seeds/01_reference_data.sql
+
+# Load demo data for dev
+./scripts/seed.sh database/seeds/05_demo_data.sql
 
 # Load test users (dev only)
 ./scripts/seed.sh --test-users
@@ -399,6 +422,30 @@ rm -rf database/backups/backup_*.sql
 - **Logs**: Centralized in `/logs` directory
 - **Tracing**: OpenTelemetry ready (not enabled by default)
 - **Alerts**: Configure in `monitoring/alerts.yml`
+
+## Current Status (Local Dev)
+
+- Containers running: PostgreSQL (PostGIS), Redis, MinIO, Adminer, Redis Commander, ML Model Server
+- Core schemas initialized: auth, users, content, progress, ml_infrastructure
+- Demo data available: 2 users, 2 profiles, 2 content items, 2 progress rows, 2 ML models
+
+## Content Bridge (Local Content Delivery)
+
+Start content bridge and mount content repository:
+
+```bash
+./scripts/setup-content-dev.sh
+```
+
+API endpoints:
+
+- Health: GET http://localhost:8090/health
+- Audio: GET http://localhost:8090/api/audio/{category}/{species}/{filename}
+- Icons: GET http://localhost:8090/api/icons/{category}/{name}
+- Research: GET http://localhost:8090/api/research/{category}/{paper_id}
+- Manifest: GET http://localhost:8090/api/manifest
+
+Environment config example: `config/services/alpha.yaml`.
 
 ## Support
 

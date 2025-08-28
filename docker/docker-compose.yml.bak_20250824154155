@@ -148,7 +148,7 @@ services:
       - "8090:8090"
     volumes:
       # Mount hma-content repository (read-only)
-      - /home/xbyooki/projects/hma-content:/content:ro
+      - ${HMA_CONTENT_PATH:-../../hma-content}:/content:ro
       # Generated assets
       - ../generated/content:/generated
       # Cache for processed content
