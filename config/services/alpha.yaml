@@ -1,0 +1,21 @@
+services:
+  content:
+    mode: local
+    endpoints:
+      audio: http://content-bridge:8090/api/audio
+      media: http://content-bridge:8090/api/icons
+      research: http://content-bridge:8090/api/research
+      ml_features: http://content-bridge:8090/api/ml
+      static: http://content-bridge:8090/static
+
+  education:
+    content_source: content.endpoints.static
+    audio_processor: content.endpoints.audio
+
+  gamecalls:
+    master_audio: content.endpoints.audio
+    features_api: content.endpoints.ml_features
+
+  field-guide:
+    icons: content.endpoints.media
+    offline_manifest: content.endpoints.static
