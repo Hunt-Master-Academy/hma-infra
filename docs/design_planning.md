@@ -1,10 +1,10 @@
 # Database Architecture Management Strategy
 
-## 🎯 Recommendation: Centralize in `hma-infra`
+## Recommendation: Centralize in `hma-infra`
 
 You're absolutely right - a **single repository approach using `hma-infra`** is the best choice for managing database architecture. Here's why and how to structure it:
 
-## 📋 Why `hma-infra` is the Right Choice
+## Why `hma-infra` is the Right Choice
 
 ### 1. **Single Source of Truth**
 ```yaml
@@ -115,7 +115,7 @@ module "databases" {
 }
 ```
 
-## 🏗️ Recommended Repository Organization
+## Recommended Repository Organization
 
 ### Complete `hma-infra` Database Management Structure
 
@@ -173,7 +173,7 @@ hma-infra/
         └── backup-verification.yml  # Backup testing
 ```
 
-## 🔄 Migration Management Strategy
+## Migration Management Strategy
 
 ### Centralized Migration Control
 ```python
@@ -286,7 +286,7 @@ async def main():
     await manager.run_migrations()
 ```
 
-## 🤝 Service Integration Pattern
+## Service Integration Pattern
 
 ### How Services Interact with Centralized Database
 
@@ -325,20 +325,20 @@ service-repo/
     └── database.ts        # Connection config only
 ```
 
-## 📊 Benefits vs Alternatives Comparison
+## Benefits vs Alternatives Comparison
 
 | Aspect | Centralized (hma-infra) | Distributed (per-service) | Hybrid |
 |--------|------------------------|--------------------------|---------|
-| **Data Consistency** | ✅ Excellent - single source | ⚠️ Difficult - coordination needed | ⚠️ Complex |
-| **Migration Management** | ✅ Atomic, ordered | ❌ Race conditions | ⚠️ Partial coverage |
-| **Cross-Service Queries** | ✅ Native support | ❌ Requires federation | ⚠️ Limited |
-| **Development Speed** | ✅ Faster - reuse schemas | ⚠️ Duplication | ⚠️ Mixed |
-| **Operational Complexity** | ✅ Single point to manage | ❌ Multiple points | ❌ Most complex |
-| **Rollback Capability** | ✅ Coordinated | ❌ Service-by-service | ⚠️ Partial |
-| **Compliance/Auditing** | ✅ Centralized | ❌ Distributed | ⚠️ Multiple locations |
-| **Team Autonomy** | ⚠️ Requires coordination | ✅ Full autonomy | ⚠️ Mixed |
+| **Data Consistency** | Excellent - single source | Difficult - coordination needed | Complex |
+| **Migration Management** | Atomic, ordered | Race conditions | Partial coverage |
+| **Cross-Service Queries** | Native support | Requires federation | Limited |
+| **Development Speed** | Faster - reuse schemas | Duplication | Mixed |
+| **Operational Complexity** | Single point to manage | Multiple points | Most complex |
+| **Rollback Capability** | Coordinated | Service-by-service | Partial |
+| **Compliance/Auditing** | Centralized | Distributed | Multiple locations |
+| **Team Autonomy** | Requires coordination | Full autonomy | Mixed |
 
-## 🚀 Implementation Checklist
+## Implementation Checklist
 
 ```markdown
 ## Phase 1: Repository Setup (Week 1)
@@ -373,7 +373,7 @@ service-repo/
 - [ ] Document runbooks
 ```
 
-## 🎯 Key Success Factors
+## Key Success Factors
 
 1. **Clear Ownership**: Database team owns `hma-infra/databases/`
 2. **Service Boundaries**: Services can request schema changes via PR
