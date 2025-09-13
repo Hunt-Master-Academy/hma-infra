@@ -1,0 +1,105 @@
+# .github/workflows/integration-tests.yml
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: huntmaster
+          POSTGRES_USER: hma_admin
+          POSTGRES_PASSWORD: development_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7.2-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 30s
+          --health-timeout 20s
+          --health-retries 3
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements-test.txt
+        npm ci
+
+    - name: Start Content Bridge
+      run: |
+        npm run build
+        npm run start &
+        sleep 30
+
+    - name: Start ML Server
+      run: |
+        cd ml-server
+        pip install -r requirements.txt
+        python -m uvicorn main:app --host 0.0.0.0 --port 8010 &
+        sleep 30
+
+    - name: Run Integration Tests
+      run: |
+        python -m pytest tests/test_service_integration.py \
+          --junitxml=test-results.xml \
+          --html=test-report.html \
+          --self-contained-html \
+          --tb=short \
+          -v
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          test-results.xml
+          test-report.html
+          integration_test_*.log
+          integration_test_report.json
+
+    - name: Publish Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: Integration Tests Results
+        path: test-results.xml
+        reporter: java-junit

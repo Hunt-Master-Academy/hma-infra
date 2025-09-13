@@ -108,7 +108,7 @@ services:
     build:
       context: ../ml-server
       dockerfile: Dockerfile
-    container_name: hma_ml_server
+    container_name: hma-ml-server
     environment:
       MODEL_PATH: /models
       REDIS_URL: redis://:${REDIS_PASSWORD:-development_redis}@redis:6379

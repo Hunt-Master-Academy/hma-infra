@@ -217,3 +217,111 @@ async def audio_index():
 async def audio_ids():
     idx = content_service.load_audio_index()
     return sorted({item.get("id") for item in idx.get("items", [])})
+
+# Authentication Endpoints
+@app.post("/auth/login")
+async def login(credentials: dict):
+    """Mock login endpoint"""
+    username = credentials.get("username")
+    password = credentials.get("password")
+
+    if username == "admin@test.com" and password == "admin123":
+        return {
+            "access_token": "mock_admin_token_12345",
+            "token_type": "bearer",
+            "user": {"id": 1, "username": username, "role": "admin"}
+        }
+    elif username == "user@test.com" and password == "user123":
+        return {
+            "access_token": "mock_user_token_67890",
+            "token_type": "bearer",
+            "user": {"id": 2, "username": username, "role": "user"}
+        }
+    else:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+@app.post("/auth/token")
+async def token_refresh(token_data: dict):
+    """Mock token refresh endpoint"""
+    refresh_token = token_data.get("refresh_token")
+    if refresh_token in ["mock_admin_token_12345", "mock_user_token_67890"]:
+        return {
+            "access_token": "mock_refreshed_token_99999",
+            "token_type": "bearer"
+        }
+    raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+@app.get("/auth/me")
+async def get_current_user():
+    """Mock current user endpoint"""
+    return {"id": 1, "username": "admin@test.com", "role": "admin"}
+
+# Role-based Access Endpoints
+@app.get("/admin/dashboard")
+async def admin_dashboard():
+    """Admin-only endpoint"""
+    return {"message": "Admin dashboard data", "stats": {"users": 150, "content": 2500}}
+
+@app.get("/admin/users")
+async def admin_users():
+    """Admin-only endpoint for user management"""
+    return {
+        "message": "Admin users management",
+        "users": [
+            {"id": 1, "username": "admin@test.com", "role": "admin", "status": "active"},
+            {"id": 2, "username": "user@test.com", "role": "user", "status": "active"}
+        ]
+    }
+
+@app.get("/instructor/courses")
+async def instructor_courses():
+    """Instructor-only endpoint for course management"""
+    return {
+        "message": "Instructor courses management",
+        "courses": [
+            {"id": 1, "title": "Hunting Basics", "students": 25, "status": "active"},
+            {"id": 2, "title": "Advanced Tracking", "students": 15, "status": "draft"}
+        ]
+    }
+
+@app.get("/student/progress")
+async def student_progress():
+    """Student endpoint for progress tracking"""
+    return {
+        "message": "Student progress tracking",
+        "progress": [
+            {"course_id": 1, "course_title": "Hunting Basics", "completion": 75, "grade": "B+"},
+            {"course_id": 2, "course_title": "Advanced Tracking", "completion": 45, "grade": "A-"}
+        ]
+    }
+
+# Error Simulation Endpoints
+@app.get("/bad-request")
+async def simulate_bad_request():
+    """Simulate 400 Bad Request error"""
+    raise HTTPException(status_code=400, detail="Bad request - invalid parameters")
+
+@app.get("/unprocessable")
+async def simulate_unprocessable():
+    """Simulate 422 Unprocessable Entity error"""
+    raise HTTPException(status_code=422, detail="Unprocessable entity - validation failed")
+
+@app.post("/content/upload")
+async def upload_content(data: dict):
+    """Mock content upload endpoint"""
+    if 'invalid' in data:
+        raise HTTPException(status_code=400, detail="Invalid content data")
+    return {"message": "Content uploaded successfully", "content_id": "12345"}
+
+@app.get("/nonexistent")
+async def nonexistent_endpoint():
+    """Mock nonexistent endpoint that returns custom error"""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": "Resource not found",
+            "message": "The requested resource does not exist",
+            "timestamp": "2025-09-11T12:00:00Z"
+        }
+    )
