@@ -354,11 +354,11 @@ Coordination Notes
 
 # Content Integration Strategy for HMA Infrastructure
 
-## 🎯 Architecture Recommendation: Federated Content with Local Proxy
+##  Architecture Recommendation: Federated Content with Local Proxy
 
 Yes, it makes perfect sense to reference `hma-content` from `hma-infra`, but with a **federated architecture** that maintains separation of concerns while enabling seamless local development.
 
-## 📁 Content Repository Structure
+##  Content Repository Structure
 
 ### Recommended `hma-content` Organization
 ```yaml
@@ -423,7 +423,7 @@ hma-content/
 └── .gitattributes                  # LFS configuration
 ```
 
-## 🔄 Integration Architecture
+##  Integration Architecture
 
 ### 1. Content Bridge Service for Local Development
 
@@ -677,7 +677,7 @@ app.mount("/static", StaticFiles(directory=str(CONTENT_ROOT)), name="static")
 
 set -e
 
-echo "🎯 Setting up HMA content development environment..."
+echo " Setting up HMA content development environment..."
 
 # Check if hma-content repo exists
 CONTENT_PATH="${HMA_CONTENT_PATH:-../hma-content}"
@@ -713,10 +713,10 @@ docker compose up -d content-bridge
 echo "⏳ Waiting for content bridge to be healthy..."
 timeout 30 bash -c 'until curl -f http://localhost:8090/health > /dev/null 2>&1; do sleep 1; done'
 
-echo "✅ Content development environment ready!"
+echo " Content development environment ready!"
 echo ""
-echo "📚 Content API available at: http://localhost:8090"
-echo "📁 Content directory: $CONTENT_PATH"
+echo " Content API available at: http://localhost:8090"
+echo " Content directory: $CONTENT_PATH"
 echo "🔍 MinIO console: http://localhost:9001"
 ```
 
@@ -861,7 +861,7 @@ environments:
     edge_locations: true
 ```
 
-## 🔄 Development Workflow
+##  Development Workflow
 
 ### Local Development Cycle
 
@@ -908,7 +908,7 @@ curl http://localhost:8090/api/manifest | jq .
 python scripts/test-ml-pipeline.py --audio test.wav
 ```
 
-## 📊 Benefits of This Approach
+##  Benefits of This Approach
 
 ### 1. **Separation of Concerns**
 - Content versioning separate from infrastructure
@@ -930,7 +930,7 @@ python scripts/test-ml-pipeline.py --audio test.wav
 - Test with S3/CDN without deploying
 - Switch between modes easily
 
-## 🎯 Implementation Checklist
+##  Implementation Checklist
 
 ```markdown
 ## Content Integration MVP
