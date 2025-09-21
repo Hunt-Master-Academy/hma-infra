@@ -23,7 +23,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - hma_network
+      - hma-network
     deploy:
       resources:
         limits:
@@ -51,7 +51,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - hma_network
+      - hma-network
 
   # MinIO for S3-compatible object storage
   minio:
@@ -72,7 +72,7 @@ services:
       timeout: 20s
       retries: 3
     networks:
-      - hma_network
+      - hma-network
 
   # Adminer for database management
   adminer:
@@ -84,7 +84,7 @@ services:
       ADMINER_DEFAULT_SERVER: postgres
       ADMINER_DESIGN: pepa-linha-dark
     networks:
-      - hma_network
+      - hma-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,7 +98,7 @@ services:
     ports:
       - "8081:8081"
     networks:
-      - hma_network
+      - hma-network
     depends_on:
       redis:
         condition: service_healthy
@@ -122,7 +122,7 @@ services:
       - ../models:/models
       - ../ml-server/src:/app
     networks:
-      - hma_network
+      - hma-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -154,7 +154,7 @@ services:
       # Cache for processed content
       - content-cache:/cache
     networks:
-      - hma_network
+      - hma-network
     depends_on:
       postgres:
         condition: service_healthy
@@ -179,8 +179,5 @@ volumes:
     driver: local
 
 networks:
-  hma_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
+  hma-network:
+    external: true
