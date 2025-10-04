@@ -1,0 +1,25 @@
+# Restrict which workloads can call brain-service in staging
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-from-academy-api
+  namespace: brain-service-staging
+spec:
+  selector:
+    matchLabels:
+      app: brain-service
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/academy-api-staging/sa/academy-api"
+      to:
+        - operation:
+            hosts:
+              - "brain-service-staging.brain-service-staging.svc.cluster.local"
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
