@@ -1,0 +1,18 @@
+# Enforce strict mTLS for staging namespaces
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: academy-api-staging-default
+  namespace: academy-api-staging
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: brain-service-staging-default
+  namespace: brain-service-staging
+spec:
+  mtls:
+    mode: STRICT
