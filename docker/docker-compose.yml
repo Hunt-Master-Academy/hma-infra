@@ -229,7 +229,8 @@ services:
       NODE_ENV: development
       DOCKER: "true"
       PORT: 3004
-      VITE_API_URL: http://hma-academy-api:3000
+      # Don't override VITE_API_URL - let it use .env value (http://localhost:3004/api)
+      # Browser needs localhost for proxy, not internal Docker hostname
     depends_on:
       hma-academy-api:
         condition: service_healthy
