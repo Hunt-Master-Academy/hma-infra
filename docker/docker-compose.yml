@@ -1,12 +1,18 @@
-# docker-compose.yml
+# HMA Infrastructure and Application Services
+# Merged docker-compose orchestrating all services for local development
 
 services:
-  # PostgreSQL with all extensions
+  # ============================================================================
+  # INFRASTRUCTURE SERVICES
+  # ============================================================================
+  
+  # PostgreSQL with PostGIS extensions
   postgres:
     image: postgis/postgis:16-3.4
     container_name: hma_postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: huntmaster
+      POSTGRES_DB: hma_academy
       POSTGRES_USER: hma_admin
       POSTGRES_PASSWORD: ${DB_PASSWORD:-development_password}
       POSTGRES_INITDB_ARGS: "--data-checksums"
@@ -18,7 +24,7 @@ services:
       - ../database/init:/docker-entrypoint-initdb.d
       - ../database/backups:/backups
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hma_admin -d huntmaster"]
+      test: ["CMD-SHELL", "pg_isready -U hma_admin -d hma_academy"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,6 +41,7 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: hma_redis
+    restart: unless-stopped
     command: >-
       redis-server
       --appendonly yes
@@ -46,7 +53,7 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "development_redis", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -55,8 +62,9 @@ services:
 
   # MinIO for S3-compatible object storage
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:RELEASE.2024-09-22T00-33-43Z
     container_name: hma_minio
+    restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
@@ -67,17 +75,22 @@ services:
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/minio/health/live"]
       interval: 30s
       timeout: 20s
       retries: 3
     networks:
       - hma-network
 
+  # ============================================================================
+  # MANAGEMENT & ADMIN TOOLS
+  # ============================================================================
+
   # Adminer for database management
   adminer:
     image: adminer:latest
     container_name: hma_adminer
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -93,6 +106,7 @@ services:
   redis-commander:
     image: rediscommander/redis-commander:latest
     container_name: hma_redis_commander
+    restart: unless-stopped
     environment:
       REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-development_redis}
     ports:
@@ -103,70 +117,196 @@ services:
       redis:
         condition: service_healthy
 
-  # ML Model Server (for local testing)
-  ml-server:
-    build:
-      context: ../ml-server
-      dockerfile: Dockerfile
-    container_name: hma-ml-server
+  # ============================================================================
+  # APPLICATION SERVICES
+  # ============================================================================
+
+  # HMA Academy Brain - Core backend service
+  hma-academy-brain:
+    build: ../../hma-academy-brain
+    container_name: hma-academy-brain
+    restart: unless-stopped
+    env_file:
+      - ../../hma-academy-brain/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
     environment:
-      MODEL_PATH: /models
-      REDIS_URL: redis://:${REDIS_PASSWORD:-development_redis}@redis:6379
-      POSTGRES_URL: postgresql://hma_admin:${DB_PASSWORD:-development_password}@postgres:5432/huntmaster
+      # Docker-specific overrides for infrastructure connectivity
+      DATABASE_PROVIDER: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: hma_academy
+      DB_USER: hma_admin
+      DB_PASSWORD: ${DB_PASSWORD:-development_password}
+      DB_SSL: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+      MINIO_USE_SSL: "false"
+      PORT: 4000
+      NODE_ENV: development
+      # Frontend URL for email links (overrides .env default)
+      APP_FRONTEND_URL: http://localhost:3004
     ports:
-      - "8010:8000"
-    volumes:
-      - ../models:/models
-      - ../ml-server/src:/app
+      - "4000:4000"
     networks:
       - hma-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-
-  # Content Bridge for local content delivery and processing
-  content-bridge:
-    build:
-      context: ../services/content-bridge
-      dockerfile: Dockerfile
-    container_name: hma-content-bridge
-    environment:
-      CONTENT_MODE: ${CONTENT_MODE:-local}
-      CONTENT_ROOT: /content
-      CACHE_DIR: /cache
-      S3_BUCKET: ${CONTENT_BUCKET:-}
-      CDN_URL: ${CDN_URL:-http://localhost:8090}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
-    ports:
-      - "8090:8090"
-    volumes:
-      # Mount hma-content repository (read-only)
-      - /home/xbyooki/projects/hma-content:/content:ro
-      # Generated assets
-      - ../generated/content:/generated
-      # Cache for processed content
-      - content-cache:/cache
-    networks:
-      - hma-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # HMA Engine Mocks - Development-only engine simulators
+  hma-engine-mocks:
+    build: ../../hma-engine-mocks
+    container_name: hma-engine-mocks
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 4100
+      MOCK_LATENCY_MS: ${MOCK_LATENCY_MS:-0}
+    ports:
+      - "4100:4100"
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4100/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
+
+  # HMA Academy API Gateway - Routes and proxies to backend services
+  hma-academy-api:
+    build: ../../hma-academy-api
+    container_name: hma-academy-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      ACADEMY_BRAIN_URL: http://hma-academy-brain:4000
+      BRAIN_URL: http://hma-academy-brain:4000
+      GAMECALLS_ENGINE_URL: http://hma-engine-mocks:4100
+      GEAR_ENGINE_URL: http://hma-engine-mocks:4100
+      HUNT_STRATEGY_ENGINE_URL: http://hma-engine-mocks:4100
+      STEALTH_ENGINE_URL: http://hma-engine-mocks:4100
+      TRACKING_ENGINE_URL: http://hma-engine-mocks:4100
+    depends_on:
+      hma-academy-brain:
+        condition: service_healthy
+      hma-engine-mocks:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+      - "3001:3001"  # Metrics port
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # HMA Academy Web - Frontend application
+  hma-academy-web:
+    build: 
+      context: ../../hma-academy-web
+      target: development
+    container_name: hma-academy-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DOCKER: "true"
+      PORT: 3004
+      VITE_API_URL: http://hma-academy-api:3000
+    depends_on:
+      hma-academy-api:
+        condition: service_healthy
+    ports:
+      - "3004:3004"
+    networks:
+      - hma-network
+    volumes:
+      - ../../hma-academy-web:/app
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3004"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================================
+  # ML & CONTENT SERVICES (Optional - can be enabled as needed)
+  # ============================================================================
+
+  # ML Model Server (for local testing)
+  # ml-server:
+  #   build:
+  #     context: ../ml-server
+  #     dockerfile: Dockerfile
+  #   container_name: hma-ml-server
+  #   environment:
+  #     MODEL_PATH: /models
+  #     REDIS_URL: redis://:${REDIS_PASSWORD:-development_redis}@redis:6379
+  #     POSTGRES_URL: postgresql://hma_admin:${DB_PASSWORD:-development_password}@postgres:5432/hma_academy
+  #     MINIO_ENDPOINT: minio:9000
+  #     MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
+  #     MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+  #   ports:
+  #     - "8010:8000"
+  #   volumes:
+  #     - ../models:/models
+  #     - ../ml-server/src:/app
+  #   networks:
+  #     - hma-network
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_healthy
+
+  # Content Bridge (for local content delivery)
+  # content-bridge:
+  #   build:
+  #     context: ../services/content-bridge
+  #     dockerfile: Dockerfile
+  #   container_name: hma-content-bridge
+  #   environment:
+  #     CONTENT_MODE: ${CONTENT_MODE:-local}
+  #     CONTENT_ROOT: /content
+  #     CACHE_DIR: /cache
+  #     S3_BUCKET: ${CONTENT_BUCKET:-}
+  #     CDN_URL: ${CDN_URL:-http://localhost:8090}
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+  #   ports:
+  #     - "8090:8090"
+  #   volumes:
+  #     - /home/xbyooki/projects/hma-content:/content:ro
+  #     - ../generated/content:/generated
+  #     - content-cache:/cache
+  #   networks:
+  #     - hma-network
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
 
 volumes:
   postgres_data:
