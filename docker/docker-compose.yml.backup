@@ -1,0 +1,184 @@
+# Backup of original hma-infra/docker/docker-compose.yml before merge
+# Created: 2025-10-05
+
+services:
+  # PostgreSQL with all extensions
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: hma_postgres
+    environment:
+      POSTGRES_DB: huntmaster
+      POSTGRES_USER: hma_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-development_password}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+      APP_PASSWORD: ${APP_PASSWORD:-app_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/init:/docker-entrypoint-initdb.d
+      - ../database/backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hma_admin -d huntmaster"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hma-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Redis for caching and queues
+  redis:
+    image: redis:7.2-alpine
+    container_name: hma_redis
+    command: >-
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-development_redis}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hma-network
+
+  # MinIO for S3-compatible object storage
+  minio:
+    image: minio/minio:latest
+    container_name: hma_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - hma-network
+
+  # Adminer for database management
+  adminer:
+    image: adminer:latest
+    container_name: hma_adminer
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha-dark
+    networks:
+      - hma-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: hma_redis_commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-development_redis}
+    ports:
+      - "8081:8081"
+    networks:
+      - hma-network
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ML Model Server (for local testing)
+  ml-server:
+    build:
+      context: ../ml-server
+      dockerfile: Dockerfile
+    container_name: hma-ml-server
+    environment:
+      MODEL_PATH: /models
+      REDIS_URL: redis://:${REDIS_PASSWORD:-development_redis}@redis:6379
+      POSTGRES_URL: postgresql://hma_admin:${DB_PASSWORD:-development_password}@postgres:5432/huntmaster
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+    ports:
+      - "8010:8000"
+    volumes:
+      - ../models:/models
+      - ../ml-server/src:/app
+    networks:
+      - hma-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # Content Bridge for local content delivery and processing
+  content-bridge:
+    build:
+      context: ../services/content-bridge
+      dockerfile: Dockerfile
+    container_name: hma-content-bridge
+    environment:
+      CONTENT_MODE: ${CONTENT_MODE:-local}
+      CONTENT_ROOT: /content
+      CACHE_DIR: /cache
+      S3_BUCKET: ${CONTENT_BUCKET:-}
+      CDN_URL: ${CDN_URL:-http://localhost:8090}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+    ports:
+      - "8090:8090"
+    volumes:
+      # Mount hma-content repository (read-only)
+      - /home/xbyooki/projects/hma-content:/content:ro
+      # Generated assets
+      - ../generated/content:/generated
+      # Cache for processed content
+      - content-cache:/cache
+    networks:
+      - hma-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  content-cache:
+    driver: local
+
+networks:
+  hma-network:
+    external: true
