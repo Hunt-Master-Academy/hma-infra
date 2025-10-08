@@ -1,0 +1,67 @@
+groups:
+  - name: hma-core-services
+    rules:
+      - alert: BrainServiceDown
+        expr: up{job="hma-academy-brain"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: academy-brain
+        annotations:
+          summary: "HMA Brain service is not exposing metrics"
+          description: "Prometheus has not scraped metrics from the Brain service for at least 1 minute."
+
+      - alert: ApiGatewayDown
+        expr: up{job="hma-academy-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: academy-api
+        annotations:
+          summary: "HMA API Gateway is not exposing metrics"
+          description: "Prometheus has not scraped metrics from the API gateway for at least 1 minute."
+
+      - alert: BrainCacheDisconnected
+        expr: hma_brain_cache_connected == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: academy-brain
+        annotations:
+          summary: "Brain service cache connection lost"
+          description: "Redis cache appears disconnected for the Brain service based on metrics gauge readings."
+
+      - alert: BrainDatabaseDisconnected
+        expr: hma_brain_database_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: academy-brain
+        annotations:
+          summary: "Brain service database connection lost"
+          description: "Database connectivity gauge indicates the Brain service is disconnected from PostgreSQL."
+
+      - alert: ApiHighErrorRate
+        expr: |
+          (
+            sum(rate(hma_api_http_requests_errors_total[5m]))
+            /
+            clamp_min(sum(rate(hma_api_http_requests_total[5m])), 1e-6)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: academy-api
+        annotations:
+          summary: "API gateway error rate above 5%"
+          description: "More than 5% of API requests have been returning server errors over the last 5 minutes."
+
+      - alert: ApiHighLatencyP90
+        expr: histogram_quantile(0.90, sum(rate(hma_api_http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: academy-api
+        annotations:
+          summary: "API gateway 90th percentile latency above 1s"
+          description: "API gateway p90 request latency has exceeded 1 second for the last 5 minutes."

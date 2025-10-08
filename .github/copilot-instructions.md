@@ -61,3 +61,44 @@ Purpose: This repo provides the local infrastructure for Hunt Master Academy. It
 - Seeds must be idempotent (use `ON CONFLICT DO NOTHING` or equivalent guards).
 - Validate compose after edits: `docker compose -f docker/docker-compose.yml config` (should be warning-free).
 - Prefer minimal, pinned dependencies; do not commit secrets or `.env`.
+
+## Documentation Standards - HMA Wiki
+
+**🚨 CRITICAL: All comprehensive documentation must be created in the HMA Documentation Wiki.**
+
+**Wiki Location**: `/home/xbyooki/projects/hma-docs/`
+
+**Allowed in THIS project directory**:
+- ✅ `README.md` - Project overview with links to wiki
+- ✅ `MVP_TODO.md` - Infrastructure roadmap and task tracking
+- ✅ Code comments and inline documentation
+- ✅ Script documentation (in script headers)
+
+**MUST be created in HMA Wiki** (NOT in this project):
+- ❌ Architecture documentation → Use `/hma-docs/architecture/`
+- ❌ Deployment guides → Use `/hma-docs/deployment/`
+- ❌ Docker setup guides → Use `/hma-docs/getting-started/docker-setup.md`
+- ❌ Database schema docs → Use `/hma-docs/architecture/database-schema.md`
+- ❌ Migration guides → Use `/hma-docs/archive/migrations/`
+- ❌ Infrastructure monitoring → Use `/hma-docs/architecture/`
+
+**When creating new documentation**:
+1. Check if topic exists in wiki: `/hma-docs/deployment/` or `/hma-docs/architecture/`
+2. If yes: Update existing wiki doc, don't create duplicate
+3. If no: Create in wiki with proper naming: `lowercase-with-hyphens.md`
+4. Update wiki section README to link to new doc
+5. Link from this project's README to wiki location
+
+**Example**:
+```bash
+# ❌ WRONG - Don't create comprehensive docs here
+/home/xbyooki/projects/hma-infra/DOCKER_ARCHITECTURE.md
+
+# ✅ CORRECT - Create in wiki
+/home/xbyooki/projects/hma-docs/architecture/docker-environment.md
+
+# Then link from project README
+See [Docker Environment](../hma-docs/architecture/docker-environment.md)
+```
+
+**Wiki Documentation**: See `/home/xbyooki/projects/hma-docs/README.md` for complete wiki structure and navigation.

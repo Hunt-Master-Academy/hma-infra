@@ -1,0 +1,7 @@
+# Alertmanager web configuration
+# Allows embedding in iframes
+http_config:
+  # Allow CORS from any origin (for development)
+  cors:
+    origins:
+      - '*'
