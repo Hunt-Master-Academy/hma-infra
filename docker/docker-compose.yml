@@ -257,9 +257,9 @@ services:
       MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
       MINIO_USE_SSL: "false"
       PORT: 3001
-      NODE_ENV: development
+      NODE_ENV: production
       # Frontend URL for email links (overrides .env default)
-      APP_FRONTEND_URL: http://localhost:3004
+      APP_FRONTEND_URL: http://172.16.0.4:3004
       # Observability stack URLs (Docker internal networking)
       PROMETHEUS_URL: http://hma_prometheus:9090
       GRAFANA_URL: http://hma_grafana:3000
@@ -271,6 +271,11 @@ services:
       EXTERNAL_JAEGER_URL: http://localhost:16686
     ports:
       - "3001:3001"
+    volumes:
+      # Mount hma-content for migration scripts (read-only)
+      - ../../hma-content:/hma-content:ro
+      # Mount scripts directory for development (read-only)
+      - ../../hma-academy-brain/scripts:/app/scripts:ro
     networks:
       - hma-network
     healthcheck:
