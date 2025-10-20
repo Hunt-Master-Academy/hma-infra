@@ -9,7 +9,7 @@ echo ""
 echo "1. Logging in as admin..."
 LOGIN_RESPONSE=$(curl -s -X POST $BACKEND_URL/api/admin/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"info@huntmasteracademy.com","password":"Admin123!HMA"}')
+  -d '{"email":"info@huntmasteracademy.com","password":"hu8bhy6nHU*BHY^N"}')
 
 ADMIN_TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.tokens.accessToken')
 
