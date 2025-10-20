@@ -263,6 +263,7 @@ services:
       # Observability stack URLs (Docker internal networking)
       PROMETHEUS_URL: http://hma_prometheus:9090
       GRAFANA_URL: http://hma_grafana:3000
+      GRAFANA_API_KEY: ${GRAFANA_API_KEY}
       JAEGER_URL: http://hma_jaeger:16686
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://hma_jaeger:4318/v1/traces
       OTEL_LOG_LEVEL: warn
@@ -270,12 +271,12 @@ services:
       EXTERNAL_GRAFANA_URL: http://localhost:3003
       EXTERNAL_JAEGER_URL: http://localhost:16686
       # Stripe configuration for test mode (development)
-      # Override the .env file to use test mode
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
       # Subscription tier prices
-      STRIPE_PRICE_BASIC: price_1SJl4iLvXJCUNd18AjBRo6fH
-      STRIPE_PRICE_PRO: price_1SJl4jLvXJCUNd18XQpFM6Aw
-      STRIPE_PRICE_FAMILY: price_1SJl4jLvXJCUNd189flUpZPQ
-      STRIPE_PRICE_FAMILY_PRO: price_1SJl4kLvXJCUNd18kxwDdf0O
+      STRIPE_PRICE_BASIC: ${STRIPE_PRICE_BASIC}
+      STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO}
+      STRIPE_PRICE_FAMILY: ${STRIPE_PRICE_FAMILY}
+      STRIPE_PRICE_FAMILY_PRO: ${STRIPE_PRICE_FAMILY_PRO}
       # Credit pack prices (one-time purchases)
       STRIPE_PRICE_PACK_BASIC: price_1SJl4kLvXJCUNd18H5ufNhJ5
       STRIPE_PRICE_PACK_INTERMEDIATE: price_1SJl4lLvXJCUNd1823fgsbwt
@@ -296,28 +297,6 @@ services:
       retries: 5
       start_period: 60s
 
-  # HMA Engine Mocks - Development-only engine simulators
-  hma-engine-mocks:
-    build: ../../hma-engine-mocks
-    container_name: hma-engine-mocks
-    restart: unless-stopped
-    environment:
-      NODE_ENV: development
-      PORT: 4100
-      MOCK_LATENCY_MS: ${MOCK_LATENCY_MS:-0}
-      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://hma_jaeger:4318/v1/traces
-      OTEL_LOG_LEVEL: warn
-    ports:
-      - "4100:4100"
-    networks:
-      - hma-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4100/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
   # HMA Academy API Gateway - Routes and proxies to backend services
   hma-academy-api:
     build: ../../hma-academy-api
@@ -332,15 +311,8 @@ services:
       OTEL_LOG_LEVEL: warn
       ACADEMY_BRAIN_URL: http://hma-academy-brain:3001
       BRAIN_URL: http://hma-academy-brain:3001
-      GAMECALLS_ENGINE_URL: http://hma-engine-mocks:4100
-      GEAR_ENGINE_URL: http://hma-engine-mocks:4100
-      HUNT_STRATEGY_ENGINE_URL: http://hma-engine-mocks:4100
-      STEALTH_ENGINE_URL: http://hma-engine-mocks:4100
-      TRACKING_ENGINE_URL: http://hma-engine-mocks:4100
     depends_on:
       hma-academy-brain:
-        condition: service_healthy
-      hma-engine-mocks:
         condition: service_healthy
     ports:
       - "3000:3000"
