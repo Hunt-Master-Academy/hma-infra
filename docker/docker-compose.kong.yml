@@ -1,0 +1,176 @@
+# HMA API Gateway Infrastructure - Kong
+# Phase 1: Foundation - Unified API Management
+
+services:
+  # Kong Database - PostgreSQL for Kong configuration
+  kong-database:
+    image: postgres:16-alpine
+    container_name: hma_kong_database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: ${KONG_DB_PASSWORD:-kong_dev_password}
+    volumes:
+      - kong_data:/var/lib/postgresql/data
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kong Database Migration - Initialize Kong schema
+  kong-migration:
+    image: kong:3.5
+    container_name: hma_kong_migration
+    restart: "no"
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PORT: 5432
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: ${KONG_DB_PASSWORD:-kong_dev_password}
+    command: kong migrations bootstrap
+    networks:
+      - hma-network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+
+  # Kong Gateway - API Gateway
+  kong:
+    image: kong:3.5
+    container_name: hma_kong
+    restart: unless-stopped
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_PORT: 5432
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: ${KONG_DB_PASSWORD:-kong_dev_password}
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000,0.0.0.0:8445 ssl
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+      # Plugin settings
+      KONG_PLUGINS: bundled,prometheus
+      KONG_LOG_LEVEL: info
+    ports:
+      - "8000:8000"   # HTTP Proxy
+      - "8445:8443"   # HTTPS Proxy (changed from 8443 to avoid conflict with Caddy)
+      - "8001:8001"   # Admin API
+      - "8002:8002"   # Admin GUI (Kong Manager OSS)
+    networks:
+      - hma-network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+      kong-migration:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Konga - Kong Admin UI
+  konga:
+    image: pantsel/konga:0.14.9
+    container_name: hma_konga
+    restart: unless-stopped
+    environment:
+      DB_ADAPTER: postgres
+      DB_HOST: kong-database
+      DB_PORT: 5432
+      DB_DATABASE: konga
+      DB_USER: kong
+      DB_PASSWORD: ${KONG_DB_PASSWORD:-kong_dev_password}
+      NODE_ENV: production
+      KONGA_HOOK_TIMEOUT: 120000
+    ports:
+      - "1337:1337"
+    networks:
+      - hma-network
+    depends_on:
+      kong-database:
+        condition: service_healthy
+      kong:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:1337"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  kong_data:
+    driver: local
+
+networks:
+  hma-network:
+    external: true
+
+# Usage Instructions:
+# 1. Start Kong:
+#    docker compose -f docker-compose.kong.yml up -d
+#
+# 2. Access Kong Admin API:
+#    curl http://localhost:8001
+#
+# 3. Access Konga UI:
+#    http://localhost:1337
+#    (Create admin account on first login)
+#
+# 4. Configure Kong connection in Konga:
+#    Name: HMA Kong
+#    Kong Admin URL: http://kong:8001
+#
+# 5. Add a service (example - Brain API):
+#    curl -i -X POST http://localhost:8001/services \
+#      --data name=hma-brain \
+#      --data url='http://hma-academy-brain:3001'
+#
+# 6. Add a route to the service:
+#    curl -i -X POST http://localhost:8001/services/hma-brain/routes \
+#      --data 'paths[]=/api' \
+#      --data name=brain-api
+#
+# 7. Test the route:
+#    curl http://localhost:8000/api/health
+#
+# 8. Enable JWT plugin:
+#    curl -X POST http://localhost:8001/services/hma-brain/plugins \
+#      --data "name=jwt"
+#
+# 9. Enable rate limiting plugin:
+#    curl -X POST http://localhost:8001/services/hma-brain/plugins \
+#      --data "name=rate-limiting" \
+#      --data "config.minute=60" \
+#      --data "config.hour=1000"
+#
+# 10. Enable Prometheus plugin (global):
+#     curl -X POST http://localhost:8001/plugins \
+#       --data "name=prometheus"
+#
+# 11. View Kong metrics:
+#     curl http://localhost:8001/metrics
+#
+# 12. Configure Prometheus to scrape Kong:
+#     Add to prometheus.yml:
+#     - job_name: 'kong'
+#       static_configs:
+#         - targets: ['kong:8001']

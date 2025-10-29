@@ -1,0 +1,175 @@
+# Docker Compose Override for CISO Assistant
+# Production-ready configuration with Redis and Docker secrets
+#
+# Usage:
+#   docker compose -f docker-compose.compliance.yml -f docker-compose.compliance.override.yml up -d
+#
+# This override provides:
+# - Docker secrets instead of .env variables
+# - Redis-based Huey task queue (production-ready)
+# - Enhanced logging configuration
+# - Resource limits
+# - Health check improvements
+
+version: '3.8'
+
+secrets:
+  ciso_django_secret:
+    file: ./secrets/CISO_DJANGO_SECRET
+  ciso_db_password:
+    file: ./secrets/CISO_DB_PASSWORD
+  minio_access_key:
+    file: ./secrets/MINIO_ACCESS_KEY
+  minio_secret_key:
+    file: ./secrets/MINIO_SECRET_KEY
+  smtp_password:
+    file: ./secrets/SMTP_PASSWORD
+
+services:
+  hma-ciso-backend:
+    secrets:
+      - ciso_django_secret
+      - ciso_db_password
+      - minio_access_key
+      - minio_secret_key
+      - smtp_password
+    
+    environment:
+      # Secrets from files
+      DJANGO_SECRET_KEY_FILE: /run/secrets/ciso_django_secret
+      POSTGRES_PASSWORD_FILE: /run/secrets/ciso_db_password
+      AWS_ACCESS_KEY_ID_FILE: /run/secrets/minio_access_key
+      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/minio_secret_key
+      EMAIL_HOST_PASSWORD_FILE: /run/secrets/smtp_password
+      
+      # Redis-based Huey (production mode)
+      HUEY_STORAGE: redis
+      HUEY_HOST: redis
+      HUEY_PORT: 6379
+      HUEY_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+      HUEY_DB: 1  # Use DB 1 for Huey (DB 0 for sessions)
+      
+      # Enhanced logging
+      DJANGO_LOG_LEVEL: INFO
+      HUEY_LOG_LEVEL: INFO
+      
+      # Timezone configuration
+      TZ: America/New_York
+      
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=ciso-backend"
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "check", "--database", "default"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  hma-ciso-worker:
+    secrets:
+      - ciso_django_secret
+      - ciso_db_password
+      - minio_access_key
+      - minio_secret_key
+    
+    environment:
+      # Secrets from files
+      DJANGO_SECRET_KEY_FILE: /run/secrets/ciso_django_secret
+      POSTGRES_PASSWORD_FILE: /run/secrets/ciso_db_password
+      AWS_ACCESS_KEY_ID_FILE: /run/secrets/minio_access_key
+      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/minio_secret_key
+      
+      # Redis-based Huey (production mode)
+      HUEY_STORAGE: redis
+      HUEY_HOST: redis
+      HUEY_PORT: 6379
+      HUEY_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+      HUEY_DB: 1
+      
+      # Worker configuration
+      HUEY_WORKERS: 2  # Number of worker threads
+      HUEY_IMMEDIATE: "False"  # Disable immediate mode (use queue)
+      
+      # Timezone
+      TZ: America/New_York
+      
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=ciso-worker"
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    
+    # Mount evidence collectors
+    volumes:
+      - ./ciso-collectors:/app/tasks/collectors:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # For Docker inventory collection
+    
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ps aux | grep -v grep | grep -q huey"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  hma-ciso-frontend:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=ciso-frontend"
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  hma-caddy:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=caddy-proxy"
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+# Note: To use this override:
+# 1. Ensure secrets files exist in ./secrets/
+# 2. Update docker-compose.compliance.yml to read secrets from files
+# 3. Run: docker compose -f docker-compose.compliance.yml -f docker-compose.compliance.override.yml up -d

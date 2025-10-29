@@ -1,0 +1,15 @@
+<!-- HMA Custom Log Decoders -->
+<decoder name="hma-json">
+  <program_name>hma-academy</program_name>
+  <plugin_decoder>JSON_Decoder</plugin_decoder>
+</decoder>
+
+<decoder name="hma-brain-service">
+  <parent>hma-json</parent>
+  <prematch>"service":"hma-academy-brain"</prematch>
+</decoder>
+
+<decoder name="hma-api-gateway">
+  <parent>hma-json</parent>
+  <prematch>"service":"hma-academy-api"</prematch>
+</decoder>

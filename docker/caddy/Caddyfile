@@ -1,0 +1,139 @@
+# HMA Compliance Stack - Caddy Reverse Proxy Configuration
+# Provides TLS termination and routing for CISO Assistant and Wazuh
+
+# ============================================================================
+# CISO ASSISTANT - GRC Platform
+# ============================================================================
+
+https://localhost {
+    # TLS with self-signed cert for development
+    tls internal
+    
+    # Default: Reverse proxy to SvelteKit frontend
+    reverse_proxy hma-ciso-frontend:3000 {
+        # Pass original headers
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        
+        # Strip headers that block iframe embedding
+        header_down -X-Frame-Options
+        header_down -Content-Security-Policy
+    }
+    
+    # Backend API proxy
+    handle /api/* {
+        reverse_proxy hma-ciso-backend:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+            
+            # Strip headers that block iframe embedding
+            header_down -X-Frame-Options
+            header_down -Content-Security-Policy
+        }
+    }
+    
+    # Static files proxy
+    handle /static/* {
+        reverse_proxy hma-ciso-backend:8000
+    }
+    
+    # Media files proxy
+    handle /media/* {
+        reverse_proxy hma-ciso-backend:8000
+    }
+    
+    # Security headers
+    header {
+        # Allow iframe embedding from HMA Academy frontend
+        # X-Frame-Options removed to allow embedding in admin dashboard
+        # XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Content Security Policy - Allow Google Fonts and other resources needed by CISO Assistant
+        Content-Security-Policy "default-src 'self' 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self';"
+    }
+    
+    # Logging
+    log {
+        output file /data/logs/ciso-assistant-access.log
+        format json
+    }
+}
+
+# ============================================================================
+# WAZUH DASHBOARD - SIEM Interface
+# ============================================================================
+
+:8444 {
+    # TLS with self-signed cert for development
+    tls internal
+    
+    # Reverse proxy to Wazuh Dashboard
+    reverse_proxy hma-wazuh-dashboard:5601 {
+        # Pass original headers
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        
+        # Increase timeouts for large queries
+        transport http {
+            read_timeout 90s
+            write_timeout 90s
+        }
+    }
+    
+    # Security headers
+    header {
+        # Allow iframe embedding from HMA Academy frontend
+        # X-Frame-Options removed to allow embedding in admin dashboard
+        X-XSS-Protection "1; mode=block"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    # Logging
+    log {
+        output file /data/logs/wazuh-dashboard-access.log
+        format json
+    }
+}
+
+# ============================================================================
+# HTTP to HTTPS Redirect (Optional)
+# ============================================================================
+
+http://localhost:8080 {
+    redir https://localhost:8443{uri} permanent
+}
+
+# ============================================================================
+# PRODUCTION CONFIGURATION NOTES
+# ============================================================================
+#
+# For production deployment, replace localhost with your actual domain:
+#
+# https://compliance.huntmasteracademy.com {
+#     tls your-email@huntmasteracademy.com  # Let's Encrypt auto-SSL
+#     reverse_proxy hma-ciso-frontend:3000
+#     # ... rest of config
+# }
+#
+# https://siem.huntmasteracademy.com {
+#     tls your-email@huntmasteracademy.com  # Let's Encrypt auto-SSL
+#     reverse_proxy hma-wazuh-dashboard:5601
+#     # ... rest of config
+# }
+#
+# Caddy will automatically obtain and renew Let's Encrypt certificates
+#
+# ============================================================================

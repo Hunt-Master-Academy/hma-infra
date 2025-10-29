@@ -1,0 +1,432 @@
+# HMA Compliance & Security Stack
+# CISO Assistant (GRC) + Wazuh (SIEM) for ISO 27001, SOC 2, GDPR, CCPA compliance
+# Integrates with existing hma-infra Docker stack
+
+services:
+  # ============================================================================
+  # CISO ASSISTANT - GRC/ISMS/COMPLIANCE PLATFORM
+  # ============================================================================
+  
+  # CISO Assistant Backend (Django/Python)
+  hma-ciso-backend:
+    image: ghcr.io/intuitem/ciso-assistant-community/backend:latest
+    container_name: hma_ciso_backend
+    restart: unless-stopped
+    environment:
+      # Database connection (shared PostgreSQL)  
+      DB_ENGINE: django.db.backends.postgresql
+      POSTGRES_NAME: ciso_assistant
+      POSTGRES_USER: ciso_admin
+      POSTGRES_PASSWORD: ${CISO_DB_PASSWORD:-change_me_ciso_db_pass}
+      DB_HOST: postgres
+      POSTGRES_PORT: 5432
+      
+      # Django configuration
+      ALLOWED_HOSTS: hma-ciso-backend,hma_ciso_backend,localhost,127.0.0.1
+      CISO_ASSISTANT_URL: https://localhost:8443
+      DJANGO_SECRET_KEY: ${CISO_DJANGO_SECRET:-change_me_to_50_char_random_string}
+      DJANGO_DEBUG: "False"
+      AUTH_TOKEN_TTL: 7200
+      
+      # S3/MinIO for evidence storage
+      AWS_ACCESS_KEY_ID: ${MINIO_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-minioadmin}
+      AWS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_STORAGE_BUCKET_NAME: hma-compliance-evidence
+      AWS_S3_REGION_NAME: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_S3_USE_SSL: "false"
+      
+      # Email Configuration (Hostinger SMTP - Port 587 with STARTTLS)
+      # Using port 587 with STARTTLS because Django doesn't support EMAIL_USE_SSL for port 465
+      # Using hostname for proper SSL certificate validation
+      EMAIL_HOST: ${SMTP_HOST}
+      EMAIL_HOST_USER: ${SMTP_USER}
+      EMAIL_HOST_PASSWORD: ${SMTP_PASSWORD}
+      EMAIL_PORT: 587
+      EMAIL_USE_TLS: "True"
+      DEFAULT_FROM_EMAIL: ${SMTP_FROM}
+      EMAIL_TIMEOUT: 30
+      
+      # Redis for background tasks (use Redis instead of SQLite)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+      
+      # Huey task queue configuration (force Redis instead of SQLite)
+      HUEY_STORAGE: redis
+      HUEY_HOST: redis
+      HUEY_PORT: 6379
+      HUEY_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+      HUEY_FILE_PATH: /app/db/huey.db
+      
+    volumes:
+      - ciso_media:/app/media
+      - ciso_static:/app/static
+      - ./ciso-data/db:/app/db
+    extra_hosts:
+      # Force IPv4 resolution for smtp.hostinger.com (container has IPv6 DNS but no IPv6 route)
+      - "smtp.hostinger.com:172.65.255.143"
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD", "/code/.venv/bin/python", "manage.py", "check", "--database", "default"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # CISO Assistant Frontend (SvelteKit/Node.js)
+  hma-ciso-frontend:
+    image: ghcr.io/intuitem/ciso-assistant-community/frontend:latest
+    container_name: hma_ciso_frontend
+    restart: unless-stopped
+    environment:
+      PUBLIC_BACKEND_API_URL: http://hma-ciso-backend:8000/api
+      ORIGIN: https://localhost:8443
+      PROTOCOL_HEADER: x-forwarded-proto
+      HOST_HEADER: x-forwarded-host
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000').then(() => process.exit(0)).catch(() => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # CISO Assistant Task Queue (Huey worker for background jobs)
+  hma-ciso-worker:
+    image: ghcr.io/intuitem/ciso-assistant-community/backend:latest
+    container_name: hma_ciso_worker
+    restart: unless-stopped
+    entrypoint: ["/bin/bash", "/scripts/run-ciso-worker.sh"]
+    environment:
+      # Same environment as backend
+      DB_ENGINE: django.db.backends.postgresql
+      POSTGRES_NAME: ciso_assistant
+      POSTGRES_USER: ciso_admin
+      POSTGRES_PASSWORD: ${CISO_DB_PASSWORD:-change_me_ciso_db_pass}
+      POSTGRES_HOST: postgres
+      DB_HOST: postgres  # Also needed by start script
+      POSTGRES_PORT: 5432
+      DJANGO_SECRET_KEY: ${CISO_DJANGO_SECRET:-change_me_to_50_char_random_string}
+      DJANGO_DEBUG: "False"
+      AWS_ACCESS_KEY_ID: ${MINIO_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_PASSWORD:-minioadmin}
+      AWS_S3_ENDPOINT_URL: http://minio:9000
+      AWS_STORAGE_BUCKET_NAME: hma-compliance-evidence
+      AWS_S3_USE_SSL: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+      HUEY_FILE_PATH: /app/db/huey.db  # Explicitly set SQLite path
+      
+      # MinIO S3 Configuration for evidence collection
+      AWS_S3_REGION_NAME: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+      
+    volumes:
+      - ciso_media:/app/media
+      - ./ciso-data/db:/app/db  # SQLite Huey database
+      - ./scripts/run-ciso-worker.sh:/scripts/run-ciso-worker.sh:ro
+      - ./ciso-collectors:/app/tasks/collectors:ro  # Evidence collectors
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker API access for inventory
+    networks:
+      - hma-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # ============================================================================
+  # WAZUH SIEM - SECURITY MONITORING & THREAT DETECTION
+  # ============================================================================
+
+  # Wazuh Manager - Core SIEM engine
+  hma-wazuh-manager:
+    image: wazuh/wazuh-manager:4.9.1
+    container_name: hma_wazuh_manager
+    restart: unless-stopped
+    hostname: hma-wazuh-manager
+    environment:
+      # Indexer connection
+      INDEXER_URL: https://hma-wazuh-indexer:9200
+      INDEXER_USERNAME: admin
+      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:-SecureIndexerPassword123!}
+      
+      # Manager API credentials
+      API_USERNAME: ${WAZUH_API_USER:-hma_wazuh_api}
+      API_PASSWORD: ${WAZUH_API_PASSWORD:-SecureAPIPassword123!}
+      
+      # File integrity monitoring
+      FILEBEAT_SSL_VERIFICATION_MODE: none
+      SSL_CERTIFICATE_AUTHORITIES: ""
+      SSL_CERTIFICATE: ""
+      SSL_KEY: ""
+    ports:
+      - "1514:1514"      # Agent registration service (TCP)
+      - "1515:1515"      # Agent events (TCP)
+      - "514:514/udp"    # Syslog collector (UDP)
+      - "55000:55000"    # Wazuh API
+    volumes:
+      - wazuh_manager_data:/var/ossec/data
+      - wazuh_manager_logs:/var/ossec/logs
+      - wazuh_manager_ruleset:/var/ossec/ruleset
+      # Mount custom rules and decoders
+      - ./wazuh-config/rules:/var/ossec/etc/rules:ro
+      - ./wazuh-config/decoders:/var/ossec/etc/decoders:ro
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD", "/var/ossec/bin/wazuh-control", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Wazuh Indexer - OpenSearch for log storage and analysis
+  hma-wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.9.1
+    container_name: hma_wazuh_indexer
+    restart: unless-stopped
+    hostname: hma-wazuh-indexer
+    environment:
+      # Cluster configuration
+      cluster.name: hma-wazuh-cluster
+      node.name: hma-wazuh-node-1
+      discovery.type: single-node
+      
+      # Network configuration
+      network.host: 0.0.0.0
+      
+      # Security configuration
+      OPENSEARCH_JAVA_OPTS: "-Xms2g -Xmx2g -Dopensearch.security.disabled=true"
+      bootstrap.memory_lock: "true"
+      
+      # Disable security plugin completely
+      plugins.security.disabled: "true"
+      
+      # Performance tuning
+      indices.query.bool.max_clause_count: 8192
+      compatibility.override_main_response_version: "true"
+    ports:
+      - "9200:9200"      # REST API
+      - "9300:9300"      # Node communication
+    volumes:
+      - wazuh_indexer_data:/var/lib/wazuh-indexer
+      - wazuh_indexer_logs:/var/log/wazuh-indexer
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # Wazuh Dashboard - Web UI for SIEM (Kibana-like)
+  hma-wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.9.1
+    container_name: hma_wazuh_dashboard
+    restart: unless-stopped
+    hostname: hma-wazuh-dashboard
+    environment:
+      # Indexer connection
+      OPENSEARCH_HOSTS: '["http://hma-wazuh-indexer:9200"]'
+      WAZUH_API_URL: https://hma-wazuh-manager
+      
+      # Dashboard configuration
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: 5601
+      
+      # Disable SSL for development
+      OPENSEARCH_SSL_VERIFICATIONMODE: none
+      SERVER_SSL_ENABLED: "false"
+      
+      # Monitoring
+      WAZUH_MONITORING_ENABLED: "true"
+      WAZUH_MONITORING_FREQUENCY: 900
+      
+      # API credentials
+      API_USERNAME: ${WAZUH_API_USER:-hma_wazuh_api}
+      API_PASSWORD: ${WAZUH_API_PASSWORD:-SecureAPIPassword123!}
+    ports:
+      - "5601:5601"
+    volumes:
+      - wazuh_dashboard_data:/usr/share/wazuh-dashboard/data
+      - ./wazuh-config/dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
+      - ./wazuh-certs/root-ca.pem:/etc/wazuh-dashboard/certs/root-ca.pem:ro
+      - ./wazuh-certs/dashboard-cert.pem:/etc/wazuh-dashboard/certs/dashboard-cert.pem:ro
+      - ./wazuh-certs/dashboard-key.pem:/etc/wazuh-dashboard/certs/dashboard-key.pem:ro
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # ============================================================================
+  # REVERSE PROXY - TLS TERMINATION & ROUTING
+  # ============================================================================
+
+  # Caddy - Automatic HTTPS with Let's Encrypt
+  hma-caddy:
+    image: caddy:2-alpine
+    container_name: hma_caddy
+    restart: unless-stopped
+    ports:
+      - "8443:443"       # HTTPS for CISO Assistant
+      - "8444:8444"      # HTTPS for Wazuh Dashboard
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2019/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # ============================================================================
+  # PROMETHEUS EXPORTERS - METRICS FOR MONITORING
+  # ============================================================================
+
+  # Note: Wazuh Prometheus exporter will be configured manually
+  # Wazuh dashboard provides built-in metrics at /api/status
+  # These can be scraped directly by Prometheus
+
+volumes:
+  # CISO Assistant volumes
+  ciso_media:
+    driver: local
+  ciso_static:
+    driver: local
+  ciso_db:
+    driver: local
+  
+  # Wazuh Manager volumes
+  wazuh_manager_data:
+    driver: local
+  wazuh_manager_logs:
+    driver: local
+  wazuh_manager_etc:
+    driver: local
+  wazuh_manager_ruleset:
+    driver: local
+  
+  # Wazuh Indexer volumes
+  wazuh_indexer_data:
+    driver: local
+  wazuh_indexer_logs:
+    driver: local
+  
+  # Wazuh Dashboard volumes
+  wazuh_dashboard_data:
+    driver: local
+  wazuh_dashboard_config:
+    driver: local
+  
+  # Caddy volumes
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  hma-network:
+    external: true
+
+# ============================================================================
+# DEPLOYMENT INSTRUCTIONS
+# ============================================================================
+#
+# 1. Set kernel parameter for Wazuh/OpenSearch:
+#    sudo sysctl -w vm.max_map_count=262144
+#    echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
+#
+# 2. Create environment file (.env.compliance):
+#    cp .env.compliance.example .env.compliance
+#    # Edit and set secure passwords
+#
+# 3. Create PostgreSQL databases (see scripts/init-compliance-dbs.sh):
+#    docker exec hma_postgres psql -U hma_admin -d hma_academy -c "CREATE DATABASE ciso_assistant;"
+#    docker exec hma_postgres psql -U hma_admin -d hma_academy -c "CREATE USER ciso_admin WITH PASSWORD 'secure_password';"
+#    docker exec hma_postgres psql -U hma_admin -d hma_academy -c "GRANT ALL PRIVILEGES ON DATABASE ciso_assistant TO ciso_admin;"
+#
+# 4. Create MinIO bucket for evidence:
+#    docker exec hma_minio mc mb /data/hma-compliance-evidence
+#
+# 5. Create Caddy configuration:
+#    mkdir -p caddy
+#    # Create Caddyfile (see caddy/Caddyfile.example)
+#
+# 6. Create Wazuh configuration directories:
+#    mkdir -p wazuh-config/rules wazuh-config/decoders
+#
+# 7. Deploy compliance stack:
+#    docker compose -f docker-compose.compliance.yml up -d
+#
+# 8. Check service health:
+#    docker compose -f docker-compose.compliance.yml ps
+#    docker compose -f docker-compose.compliance.yml logs -f
+#
+# 9. Access services:
+#    CISO Assistant: https://localhost:8443
+#    Wazuh Dashboard: https://localhost:8444
+#    Wazuh API: https://localhost:55000
+#
+# 10. Initialize CISO Assistant:
+#     docker exec hma_ciso_backend python manage.py migrate
+#     docker exec hma_ciso_backend python manage.py createsuperuser
+#     docker exec hma_ciso_backend python manage.py loaddata frameworks
+#
+# ============================================================================

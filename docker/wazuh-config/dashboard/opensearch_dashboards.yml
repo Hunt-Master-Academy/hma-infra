@@ -1,0 +1,18 @@
+# Wazuh Dashboard Configuration - Development Environment
+
+# Server configuration
+server.host: 0.0.0.0
+server.port: 5601
+server.name: hma-wazuh-dashboard
+
+# Disable SSL for development
+server.ssl.enabled: false
+
+# OpenSearch connection
+opensearch.hosts: ["http://hma-wazuh-indexer:9200"]
+opensearch.ssl.verificationMode: none
+opensearch.requestHeadersAllowlist: ["securitytenant","Authorization"]
+
+# Security disabled for development
+opensearch.username: admin
+opensearch.password: admin

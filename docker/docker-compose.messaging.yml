@@ -1,0 +1,106 @@
+# HMA Event Streaming Infrastructure - Redpanda
+# Phase 1: Foundation - Event-Driven Architecture
+
+services:
+  # Redpanda - Kafka-compatible event streaming platform
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v23.3.3
+    container_name: hma_redpanda
+    restart: unless-stopped
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --memory 1G
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --pandaproxy-addr PLAINTEXT://0.0.0.0:8082
+      - --advertise-pandaproxy-addr PLAINTEXT://redpanda:8082,OUTSIDE://localhost:8082
+      - --rpc-addr 0.0.0.0:33145
+      - --advertise-rpc-addr redpanda:33145
+    ports:
+      - "9092:9092"   # Kafka API (external access)
+      - "8082:8082"   # HTTP Proxy API
+      - "9644:9644"   # Admin API
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy|true'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+        reservations:
+          memory: 1G
+
+  # Redpanda Console - Web UI for managing topics, messages, and monitoring
+  redpanda-console:
+    image: docker.redpanda.com/redpandadata/console:v2.4.5
+    container_name: hma_redpanda_console
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: redpanda:29092
+      KAFKA_SCHEMAREGISTRY_ENABLED: false
+      SERVER_LISTENPORT: 8080
+    ports:
+      - "9091:8080"
+    networks:
+      - hma-network
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/cluster"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redpanda Metrics - Expose metrics for Prometheus
+  # Note: Redpanda exposes metrics on port 9644/metrics by default
+  # Additional exporter not needed - Prometheus scrapes directly
+
+volumes:
+  redpanda_data:
+    driver: local
+
+networks:
+  hma-network:
+    external: true
+
+# Usage Instructions:
+# 1. Start Redpanda:
+#    docker compose -f docker-compose.messaging.yml up -d
+#
+# 2. Create topics:
+#    docker exec hma_redpanda rpk topic create user-events --partitions 3 --replicas 1
+#    docker exec hma_redpanda rpk topic create credit-events --partitions 3 --replicas 1
+#    docker exec hma_redpanda rpk topic create audit-events --partitions 3 --replicas 1
+#    docker exec hma_redpanda rpk topic create email-queue --partitions 3 --replicas 1
+#
+# 3. List topics:
+#    docker exec hma_redpanda rpk topic list
+#
+# 4. Produce test message:
+#    echo '{"userId": "123", "action": "login", "timestamp": "2025-10-24T00:00:00Z"}' | \
+#      docker exec -i hma_redpanda rpk topic produce user-events
+#
+# 5. Consume messages:
+#    docker exec hma_redpanda rpk topic consume user-events --offset start
+#
+# 6. Access Web UI:
+#    http://localhost:9091
+#
+# 7. View cluster health:
+#    docker exec hma_redpanda rpk cluster health
+#
+# 8. View cluster info:
+#    docker exec hma_redpanda rpk cluster info

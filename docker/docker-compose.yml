@@ -14,7 +14,7 @@ services:
     environment:
       POSTGRES_DB: hma_academy
       POSTGRES_USER: hma_admin
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-development_password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "--data-checksums"
       APP_PASSWORD: ${APP_PASSWORD:-app_password}
     ports:
@@ -47,7 +47,7 @@ services:
       --appendonly yes
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
-      --requirepass ${REDIS_PASSWORD:-development_redis}
+      --requirepass ${REDIS_PASSWORD}
     ports:
       - "6379:6379"
     volumes:
@@ -67,8 +67,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-minioadmin}
+      MINIO_ROOT_USER: ${MINIO_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
       MINIO_PROMETHEUS_AUTH_TYPE: public
     ports:
       - "9000:9000"
@@ -109,7 +109,7 @@ services:
     container_name: hma_redis_commander
     restart: unless-stopped
     environment:
-      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-development_redis}
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD}
     ports:
       - "8081:8081"
     networks:
@@ -246,15 +246,16 @@ services:
       DB_PORT: 5432
       DB_NAME: hma_academy
       DB_USER: hma_admin
-      DB_PASSWORD: ${DB_PASSWORD:-development_password}
+      DB_PASSWORD: ${DB_PASSWORD}
       DB_SSL: "false"
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDPANDA_BROKERS: redpanda:29092
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
-      MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+      MINIO_ACCESS_KEY: ${MINIO_USER}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD}
       MINIO_USE_SSL: "false"
       PORT: 3001
       NODE_ENV: production
@@ -277,6 +278,16 @@ services:
       STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO}
       STRIPE_PRICE_FAMILY: ${STRIPE_PRICE_FAMILY}
       STRIPE_PRICE_FAMILY_PRO: ${STRIPE_PRICE_FAMILY_PRO}
+      # CISO Assistant Integration
+      CISO_ENABLED: "true"
+      CISO_API_URL: http://hma-ciso-backend:8000
+      CISO_USERNAME: admin@huntmasteracademy.com
+      CISO_PASSWORD: HMA_Compliance_Admin_2025!
+      # Wazuh SIEM Integration
+      WAZUH_ENABLED: "true"
+      WAZUH_API_URL: https://hma-wazuh-manager:55000
+      WAZUH_USERNAME: admin
+      WAZUH_PASSWORD: admin
       # Credit pack prices (one-time purchases)
       STRIPE_PRICE_PACK_BASIC: price_1SJl4kLvXJCUNd18H5ufNhJ5
       STRIPE_PRICE_PACK_INTERMEDIATE: price_1SJl4lLvXJCUNd1823fgsbwt
@@ -296,6 +307,44 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+
+  # HMA Event Consumer Worker - Processes events from Redpanda
+  hma-event-consumer:
+    build: ../../hma-academy-brain
+    container_name: hma-event-consumer
+    restart: unless-stopped
+    command: npm run worker:events
+    env_file:
+      - ../../hma-academy-brain/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      hma-academy-brain:
+        condition: service_healthy
+    environment:
+      # Docker-specific overrides
+      DATABASE_PROVIDER: postgresql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: hma_academy
+      DB_USER: hma_admin
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_SSL: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDPANDA_BROKERS: redpanda:29092
+      NODE_ENV: production
+      # CISO Assistant (compliance integration)
+      CISO_API_URL: http://hma-ciso-backend:8000
+      CISO_USERNAME: admin@huntmasteracademy.com
+      CISO_PASSWORD: HMA_CISO_Integration_2025!
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://hma_jaeger:4318/v1/traces
+      OTEL_LOG_LEVEL: warn
+    networks:
+      - hma-network
 
   # HMA Academy API Gateway - Routes and proxies to backend services
   hma-academy-api:
@@ -365,7 +414,7 @@ services:
     container_name: hma_postgres_exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: postgresql://hma_admin:${DB_PASSWORD:-development_password}@postgres:5432/hma_academy?sslmode=disable
+      DATA_SOURCE_NAME: postgresql://hma_admin:${DB_PASSWORD}@postgres:5432/hma_academy?sslmode=disable
     ports:
       - "9187:9187"
     networks:
@@ -379,7 +428,7 @@ services:
     image: oliver006/redis_exporter:v1.60.0
     container_name: hma_redis_exporter
     restart: unless-stopped
-    command: ["--redis.addr=redis:6379", "--redis.password=${REDIS_PASSWORD:-development_redis}"]
+    command: ["--redis.addr=redis:6379", "--redis.password=${REDIS_PASSWORD}"]
     ports:
       - "9121:9121"
     networks:
@@ -414,11 +463,11 @@ services:
   #   container_name: hma-ml-server
   #   environment:
   #     MODEL_PATH: /models
-  #     REDIS_URL: redis://:${REDIS_PASSWORD:-development_redis}@redis:6379
-  #     POSTGRES_URL: postgresql://hma_admin:${DB_PASSWORD:-development_password}@postgres:5432/hma_academy
+  #     REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+  #     POSTGRES_URL: postgresql://hma_admin:${DB_PASSWORD}@postgres:5432/hma_academy
   #     MINIO_ENDPOINT: minio:9000
-  #     MINIO_ACCESS_KEY: ${MINIO_USER:-minioadmin}
-  #     MINIO_SECRET_KEY: ${MINIO_PASSWORD:-minioadmin}
+  #     MINIO_ACCESS_KEY: ${MINIO_USER}
+  #     MINIO_SECRET_KEY: ${MINIO_PASSWORD}
   #   ports:
   #     - "8010:8000"
   #   volumes:
@@ -446,7 +495,7 @@ services:
   #     CACHE_DIR: /cache
   #     S3_BUCKET: ${CONTENT_BUCKET:-}
   #     CDN_URL: ${CDN_URL:-http://localhost:8090}
-  #     REDIS_PASSWORD: ${REDIS_PASSWORD:-development_redis}
+  #     REDIS_PASSWORD: ${REDIS_PASSWORD}
   #   ports:
   #     - "8090:8090"
   #   volumes:

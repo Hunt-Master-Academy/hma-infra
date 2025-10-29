@@ -81,6 +81,17 @@ scrape_configs:
     scheme: http
     scrape_interval: 60s
 
+  # Kong API Gateway metrics
+  - job_name: 'kong'
+    static_configs:
+      - targets: ['hma_kong_dbless:8001']
+        labels:
+          service: 'kong'
+          tier: 'gateway'
+    metrics_path: '/metrics'
+    scheme: http
+    scrape_interval: 15s
+
   # HMA Academy Web (frontend) - via Blackbox probe
   - job_name: 'hma-academy-web'
     metrics_path: '/probe'

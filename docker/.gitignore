@@ -1,0 +1,13 @@
+
+# Docker secrets (security)
+secrets/*
+!secrets/README.md
+
+# Evidence collectors cache
+ciso-collectors/__pycache__/
+ciso-collectors/*.pyc
+ciso-collectors/.pytest_cache/
+
+# Backup files
+*.sql.gz
+*.sql.gz.sha256

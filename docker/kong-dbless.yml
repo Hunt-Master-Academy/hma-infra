@@ -1,0 +1,102 @@
+# Kong Declarative Configuration - DB-less Mode
+# Production-ready configuration for HMA Brain API Gateway
+
+_format_version: "3.0"
+
+services:
+  - name: hma-brain
+    url: http://hma-academy-brain:3001
+    routes:
+      - name: brain-health
+        paths:
+          - /health
+        strip_path: false
+        preserve_host: false
+      
+      - name: brain-api
+        paths:
+          - /api
+        strip_path: false
+        preserve_host: false
+        plugins:
+          - name: jwt
+            config:
+              secret_is_base64: false
+              key_claim_name: kid
+              claims_to_verify:
+                - exp
+              anonymous: null
+              run_on_preflight: true
+          
+          # Global rate limiting (default: 120 req/min for basic tier)
+          - name: rate-limiting
+            config:
+              minute: 120
+              hour: null
+              day: null
+              month: null
+              year: null
+              policy: local
+              fault_tolerant: true
+              hide_client_headers: false
+              redis_host: null
+              redis_port: 6379
+              redis_timeout: 2000
+      
+      - name: brain-admin-api
+        paths:
+          - /api/admin
+        strip_path: false
+        preserve_host: false
+        plugins:
+          - name: jwt
+            config:
+              secret_is_base64: false
+              key_claim_name: kid
+              claims_to_verify:
+                - exp
+              anonymous: null
+              run_on_preflight: true
+          
+          # Admin endpoints: higher rate limits
+          - name: rate-limiting
+            config:
+              minute: 600
+              policy: local
+              hide_client_headers: false
+
+# Consumers - JWT credentials with subscription tiers
+consumers:
+  # Default service consumer (basic tier)
+  - username: hma-brain-service
+    jwt_secrets:
+      - key: hma-brain-jwt
+        algorithm: HS256
+        secret: dev-super-secret-jwt-key-change-in-production
+    tags:
+      - tier:basic
+  
+  # Example consumers for different tiers (for testing)
+  - username: free-tier-example
+    tags:
+      - tier:free
+  
+  - username: pro-tier-example
+    tags:
+      - tier:pro
+  
+  - username: elite-tier-example
+    tags:
+      - tier:elite
+
+# Global Plugins
+plugins:
+  - name: prometheus
+    config:
+      per_consumer: false
+  
+  - name: correlation-id
+    config:
+      header_name: X-Kong-Request-Id
+      generator: uuid
+      echo_downstream: true
