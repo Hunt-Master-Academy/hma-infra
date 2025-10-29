@@ -76,3 +76,4 @@ k8s/secrets/
 *.tfstate.backup
 .terraform/
 terraform.tfvars
+test_env/
