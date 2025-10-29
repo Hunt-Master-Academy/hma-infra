@@ -345,10 +345,11 @@ services:
     ports:
       - "5005:5005"
     volumes:
-      # Mount C++ bindings and native libraries
-      - ../../hma-gamecalls-engine/backend:/app
+      # [20251029-DOCKER-001] Mount only source code, not node_modules
+      - ../../hma-gamecalls-engine/backend/src:/app/src
+      - ../../hma-gamecalls-engine/backend/migrations:/app/migrations
       - ../../hma-gamecalls-engine/bindings:/app/bindings
-      - /app/node_modules
+      # Preserve container's node_modules (installed during build)
     networks:
       - hma-network
     healthcheck:
