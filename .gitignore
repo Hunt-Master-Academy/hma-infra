@@ -1,21 +1,37 @@
 # OS
 .DS_Store
 Thumbs.db
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 
-# Env
+# Environment variables
 .env
 .env.local
+.env.*.local
 
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
+venv/
+*.egg-info/
 
 # Node
 node_modules/
+npm-debug.log*
 
-# Docker
+# Docker volumes and runtime data
 **/.docker-volume
+docker/ciso-data/db/*.db*
+docker/wazuh-data/
+docker/postgres-data/
+docker/redis-data/
+docker/minio-data/
+docker/prometheus-data/
+docker/grafana-data/
 
 # Logs
 logs/
@@ -23,14 +39,40 @@ logs/
 
 # Backups & data
 database/backups/
+backups/
+*.bak
+
+# Models
 models/
 
-# VS Code
-.vscode/.env
-data/
-backups/
-logs/
-reports/
-*.log
+# Temporary files
 *.tmp
-*.bakdocker/ciso-data/db/*.db*
+tmp/
+temp/
+
+# Reports
+reports/
+
+# Secrets (should use proper secret management)
+docker/secrets/*.key
+docker/secrets/*.pem
+docker/secrets/*.crt
+!docker/secrets/README.md
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Kubernetes secrets
+k8s/secrets/
+*.kubeconfig
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+terraform.tfvars
