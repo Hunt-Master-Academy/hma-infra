@@ -33,4 +33,4 @@ logs/
 reports/
 *.log
 *.tmp
-*.bak
+*.bakdocker/ciso-data/db/*.db*
