@@ -17,7 +17,7 @@ Admin Portal (localhost:3004/admin/observability)
 Brain Service (/api/admin/observability/*)
     ↓
 ├─→ Prometheus (hma_prometheus:9090) → Scrapes HMA services
-├─→ Grafana (hma_grafana:3000) → Visualizes metrics
+├─→ Grafana (hma_grafana:3003) → Visualizes metrics
 └─→ Jaeger (hma_jaeger:16686) → Distributed tracing
 ```
 
@@ -107,7 +107,7 @@ providers:
 ```bash
 # Docker service names (internal)
 PROMETHEUS_URL=http://hma_prometheus:9090
-GRAFANA_URL=http://hma_grafana:3000
+GRAFANA_URL=http://hma_grafana:3000  # Internal Docker network port (exposed as 3003 on host)
 JAEGER_URL=http://hma_jaeger:16686
 
 # Browser URLs (external)
