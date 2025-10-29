@@ -308,6 +308,56 @@ services:
       retries: 5
       start_period: 60s
 
+  # GameCalls Engine - Audio analysis and species identification
+  hma-gamecalls-engine:
+    build: ../../hma-gamecalls-engine/backend
+    container_name: hma-gamecalls-engine
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    environment:
+      # Infrastructure connectivity
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: hma_academy
+      DB_USER: hma_admin
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: 1
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: ${MINIO_USER}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD}
+      MINIO_USE_SSL: "false"
+      # Server configuration
+      PORT: 5005
+      NODE_ENV: production
+      ALLOWED_ORIGINS: "http://localhost:8000,http://localhost:3000,http://localhost:3004"
+      # Logging
+      LOG_LEVEL: info
+    ports:
+      - "5005:5005"
+    volumes:
+      # Mount C++ bindings and native libraries
+      - ../../hma-gamecalls-engine/backend:/app
+      - ../../hma-gamecalls-engine/bindings:/app/bindings
+      - /app/node_modules
+    networks:
+      - hma-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+
   # HMA Event Consumer Worker - Processes events from Redpanda
   hma-event-consumer:
     build: ../../hma-academy-brain
