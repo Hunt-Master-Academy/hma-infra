@@ -310,9 +310,12 @@ services:
 
   # GameCalls Engine - Audio analysis and species identification
   hma-gamecalls-engine:
-    build: ../../hma-gamecalls-engine/backend
+    build:
+      context: ../../hma-gamecalls-engine
+      dockerfile: backend/Dockerfile.multistage
     container_name: hma-gamecalls-engine
     restart: unless-stopped
+    entrypoint: ["/app/docker-entrypoint.sh"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -345,11 +348,13 @@ services:
     ports:
       - "5005:5005"
     volumes:
-      # [20251029-DOCKER-001] Mount only source code, not node_modules
+      # [20251029-DOCKER-001] Mount only source code for hot reload
       - ../../hma-gamecalls-engine/backend/src:/app/src
       - ../../hma-gamecalls-engine/backend/migrations:/app/migrations
-      - ../../hma-gamecalls-engine/bindings:/app/bindings
-      # Preserve container's node_modules (installed during build)
+      # [20251102-DOCKER-004] Mount scripts for running analysis tools
+      - ../../hma-gamecalls-engine/scripts:/app/scripts
+      # [20251030-FIX-003] Don't mount bindings - use compiled version from image
+      # Preserve container's node_modules and bindings (installed during build)
     networks:
       - hma-network
     healthcheck:

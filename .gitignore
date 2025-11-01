@@ -77,3 +77,4 @@ k8s/secrets/
 .terraform/
 terraform.tfvars
 test_env/
+hma-marksmanship-engine/
