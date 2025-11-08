@@ -153,88 +153,42 @@ services:
           memory: 256M
 
   # ============================================================================
-  # WAZUH SIEM - SECURITY MONITORING & THREAT DETECTION
+  # ELASTIC SECURITY - SIEM, SECURITY MONITORING & THREAT DETECTION
   # ============================================================================
 
-  # Wazuh Manager - Core SIEM engine
-  hma-wazuh-manager:
-    image: wazuh/wazuh-manager:4.9.1
-    container_name: hma_wazuh_manager
+  # Elasticsearch - Search and analytics engine
+  hma-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: hma_elasticsearch
     restart: unless-stopped
-    hostname: hma-wazuh-manager
+    hostname: hma-elasticsearch
     environment:
-      # Indexer connection
-      INDEXER_URL: https://hma-wazuh-indexer:9200
-      INDEXER_USERNAME: admin
-      INDEXER_PASSWORD: ${WAZUH_INDEXER_PASSWORD:-SecureIndexerPassword123!}
-      
-      # Manager API credentials
-      API_USERNAME: ${WAZUH_API_USER:-hma_wazuh_api}
-      API_PASSWORD: ${WAZUH_API_PASSWORD:-SecureAPIPassword123!}
-      
-      # File integrity monitoring
-      FILEBEAT_SSL_VERIFICATION_MODE: none
-      SSL_CERTIFICATE_AUTHORITIES: ""
-      SSL_CERTIFICATE: ""
-      SSL_KEY: ""
-    ports:
-      - "1514:1514"      # Agent registration service (TCP)
-      - "1515:1515"      # Agent events (TCP)
-      - "514:514/udp"    # Syslog collector (UDP)
-      - "55000:55000"    # Wazuh API
-    volumes:
-      - wazuh_manager_data:/var/ossec/data
-      - wazuh_manager_logs:/var/ossec/logs
-      - wazuh_manager_ruleset:/var/ossec/ruleset
-      # Mount custom rules and decoders
-      - ./wazuh-config/rules:/var/ossec/etc/rules:ro
-      - ./wazuh-config/decoders:/var/ossec/etc/decoders:ro
-    networks:
-      - hma-network
-    healthcheck:
-      test: ["CMD", "/var/ossec/bin/wazuh-control", "status"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
-
-  # Wazuh Indexer - OpenSearch for log storage and analysis
-  hma-wazuh-indexer:
-    image: wazuh/wazuh-indexer:4.9.1
-    container_name: hma_wazuh_indexer
-    restart: unless-stopped
-    hostname: hma-wazuh-indexer
-    environment:
-      # Cluster configuration
-      cluster.name: hma-wazuh-cluster
-      node.name: hma-wazuh-node-1
+      # [20251108-ELASTIC-001] Single-node cluster for development
       discovery.type: single-node
+      cluster.name: hma-elastic-cluster
+      node.name: hma-es-node-1
       
-      # Network configuration
-      network.host: 0.0.0.0
+      # [20251108-ELASTIC-002] Security settings (basic auth, no TLS for dev)
+      xpack.security.enabled: true
+      xpack.security.enrollment.enabled: true
+      xpack.security.http.ssl.enabled: false
+      xpack.security.transport.ssl.enabled: false
       
-      # Security configuration
-      OPENSEARCH_JAVA_OPTS: "-Xms2g -Xmx2g -Dopensearch.security.disabled=true"
-      bootstrap.memory_lock: "true"
+      # Elastic password
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-HMA_Elastic_Dev_Pass_2025!}
       
-      # Disable security plugin completely
-      plugins.security.disabled: "true"
+      # Memory settings
+      ES_JAVA_OPTS: "-Xms2g -Xmx2g"
+      bootstrap.memory_lock: true
       
-      # Performance tuning
+      # Performance
       indices.query.bool.max_clause_count: 8192
-      compatibility.override_main_response_version: "true"
     ports:
-      - "9200:9200"      # REST API
-      - "9300:9300"      # Node communication
+      - "9200:9200"      # HTTP API
+      - "9300:9300"      # Transport
     volumes:
-      - wazuh_indexer_data:/var/lib/wazuh-indexer
-      - wazuh_indexer_logs:/var/log/wazuh-indexer
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - elasticsearch_logs:/usr/share/elasticsearch/logs
     ulimits:
       memlock:
         soft: -1
@@ -245,7 +199,7 @@ services:
     networks:
       - hma-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test: ["CMD-SHELL", "curl -u elastic:${ELASTIC_PASSWORD:-HMA_Elastic_Dev_Pass_2025!} -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -257,42 +211,37 @@ services:
         reservations:
           memory: 2G
 
-  # Wazuh Dashboard - Web UI for SIEM (Kibana-like)
-  hma-wazuh-dashboard:
-    image: wazuh/wazuh-dashboard:4.9.1
-    container_name: hma_wazuh_dashboard
+  # Kibana - Web UI for Elasticsearch and Security features
+  hma-kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: hma_kibana
     restart: unless-stopped
-    hostname: hma-wazuh-dashboard
+    hostname: hma-kibana
     environment:
-      # Indexer connection
-      OPENSEARCH_HOSTS: '["http://hma-wazuh-indexer:9200"]'
-      WAZUH_API_URL: https://hma-wazuh-manager
+      # [20251108-ELASTIC-003] Elasticsearch connection
+      ELASTICSEARCH_HOSTS: '["http://hma-elasticsearch:9200"]'
+      # [20251108-ELASTIC-006] Use service account token instead of elastic user
+      ELASTICSEARCH_SERVICEACCOUNTTOKEN: ${KIBANA_SERVICE_TOKEN:-AAEAAWVsYXN0aWMva2liYW5hL2tpYmFuYS10b2tlbjpVZDNjMExKQVNZbUNDWkdxLWlpek5R}
       
-      # Dashboard configuration
+      # Kibana configuration
+      SERVER_NAME: hma-kibana
       SERVER_HOST: 0.0.0.0
       SERVER_PORT: 5601
       
-      # Disable SSL for development
-      OPENSEARCH_SSL_VERIFICATIONMODE: none
-      SERVER_SSL_ENABLED: "false"
+      # [20251108-ELASTIC-004] Security features enabled
+      XPACK_SECURITY_ENABLED: true
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY:-a7e52c1b8f3d9e4a6b2c8d5f1e3a7b9c}
       
       # Monitoring
-      WAZUH_MONITORING_ENABLED: "true"
-      WAZUH_MONITORING_FREQUENCY: 900
-      
-      # API credentials
-      API_USERNAME: ${WAZUH_API_USER:-hma_wazuh_api}
-      API_PASSWORD: ${WAZUH_API_PASSWORD:-SecureAPIPassword123!}
+      XPACK_MONITORING_UI_CONTAINER_ELASTICSEARCH_ENABLED: true
     ports:
       - "5601:5601"
     volumes:
-      - wazuh_dashboard_data:/usr/share/wazuh-dashboard/data
-      - ./wazuh-config/dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml:ro
-      - ./wazuh-certs/root-ca.pem:/etc/wazuh-dashboard/certs/root-ca.pem:ro
-      - ./wazuh-certs/dashboard-cert.pem:/etc/wazuh-dashboard/certs/dashboard-cert.pem:ro
-      - ./wazuh-certs/dashboard-key.pem:/etc/wazuh-dashboard/certs/dashboard-key.pem:ro
+      - kibana_data:/usr/share/kibana/data
     networks:
       - hma-network
+    depends_on:
+      - hma-elasticsearch
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
       interval: 30s
@@ -302,9 +251,89 @@ services:
     deploy:
       resources:
         limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # APM Server - Application Performance Monitoring
+  hma-apm-server:
+    image: docker.elastic.co/apm/apm-server:8.15.3
+    container_name: hma_apm_server
+    restart: unless-stopped
+    hostname: hma-apm-server
+    command: >
+      apm-server -e
+        -E output.elasticsearch.hosts=["http://hma-elasticsearch:9200"]
+        -E output.elasticsearch.username=elastic
+        -E output.elasticsearch.password=${ELASTIC_PASSWORD:-HMA_Elastic_Dev_Pass_2025!}
+        -E apm-server.kibana.enabled=true
+        -E apm-server.kibana.host=hma-kibana:5601
+        -E apm-server.host=0.0.0.0:8200
+        -E apm-server.rum.enabled=true
+        -E apm-server.rum.allow_origins=['*']
+        -E apm-server.secret_token=${APM_SECRET_TOKEN:-HMA_APM_Secret_2025}
+        -E monitoring.enabled=true
+    ports:
+      - "8201:8200"
+    volumes:
+      - apm_data:/usr/share/apm-server/data
+    networks:
+      - hma-network
+    depends_on:
+      - hma-elasticsearch
+      - hma-kibana
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8200/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
           memory: 1G
         reservations:
           memory: 512M
+
+  # Fleet Server - Centralized management for Elastic Agents (OPTIONAL)
+  # Uncomment to enable centralized agent management
+  # hma-fleet-server:
+  #   image: docker.elastic.co/beats/elastic-agent:8.15.3
+  #   container_name: hma_fleet_server
+  #   restart: unless-stopped
+  #   hostname: hma-fleet-server
+  #   profiles: ["fleet"]  # Only start with --profile fleet
+  #   environment:
+  #     # [20251108-ELASTIC-005] Fleet server mode
+  #     FLEET_SERVER_ENABLE: "1"
+  #     FLEET_SERVER_ELASTICSEARCH_HOST: http://hma-elasticsearch:9200
+  #     FLEET_SERVER_ELASTICSEARCH_USERNAME: elastic
+  #     FLEET_SERVER_ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD:-HMA_Elastic_Dev_Pass_2025!}
+  #     FLEET_SERVER_SERVICE_TOKEN: ${FLEET_SERVER_SERVICE_TOKEN}
+  #     FLEET_SERVER_POLICY_ID: fleet-server-policy
+  #     FLEET_SERVER_PORT: 8220
+  #     FLEET_SERVER_HOST: 0.0.0.0
+  #     FLEET_SERVER_INSECURE_HTTP: "1"
+  #     
+  #     # Kibana connection
+  #     KIBANA_FLEET_HOST: http://hma-kibana:5601
+  #     KIBANA_FLEET_USERNAME: elastic
+  #     KIBANA_FLEET_PASSWORD: ${ELASTIC_PASSWORD:-HMA_Elastic_Dev_Pass_2025!}
+  #   ports:
+  #     - "8220:8220"
+  #   volumes:
+  #     - fleet_data:/usr/share/elastic-agent/state
+  #   networks:
+  #     - hma-network
+  #   depends_on:
+  #     - hma-elasticsearch
+  #     - hma-kibana
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1G
+  #       reservations:
+  #         memory: 512M
 
   # ============================================================================
   # REVERSE PROXY - TLS TERMINATION & ROUTING
@@ -325,24 +354,21 @@ services:
     networks:
       - hma-network
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2019/metrics"]
+      test: ["CMD", "pidof", "caddy"]
       interval: 30s
       timeout: 10s
       retries: 3
     deploy:
       resources:
         limits:
-          memory: 256M
-        reservations:
-          memory: 128M
+          memory: 512M
 
   # ============================================================================
   # PROMETHEUS EXPORTERS - METRICS FOR MONITORING
   # ============================================================================
 
-  # Note: Wazuh Prometheus exporter will be configured manually
-  # Wazuh dashboard provides built-in metrics at /api/status
-  # These can be scraped directly by Prometheus
+  # Note: Elasticsearch metrics can be scraped from /_prometheus/metrics endpoint
+  # Kibana provides metrics at /api/status
 
 volumes:
   # CISO Assistant volumes
@@ -353,26 +379,16 @@ volumes:
   ciso_db:
     driver: local
   
-  # Wazuh Manager volumes
-  wazuh_manager_data:
+  # Elastic Stack volumes
+  elasticsearch_data:
     driver: local
-  wazuh_manager_logs:
+  elasticsearch_logs:
     driver: local
-  wazuh_manager_etc:
+  kibana_data:
     driver: local
-  wazuh_manager_ruleset:
+  apm_data:
     driver: local
-  
-  # Wazuh Indexer volumes
-  wazuh_indexer_data:
-    driver: local
-  wazuh_indexer_logs:
-    driver: local
-  
-  # Wazuh Dashboard volumes
-  wazuh_dashboard_data:
-    driver: local
-  wazuh_dashboard_config:
+  fleet_data:
     driver: local
   
   # Caddy volumes
@@ -389,7 +405,7 @@ networks:
 # DEPLOYMENT INSTRUCTIONS
 # ============================================================================
 #
-# 1. Set kernel parameter for Wazuh/OpenSearch:
+# 1. Set kernel parameter for Elasticsearch:
 #    sudo sysctl -w vm.max_map_count=262144
 #    echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
 #
