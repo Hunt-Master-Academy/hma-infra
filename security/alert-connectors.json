@@ -1,0 +1,161 @@
+{
+  "connectors": [
+    {
+      "id": "hma-email-security-alerts",
+      "name": "HMA Security Alerts - Email",
+      "connector_type_id": ".email",
+      "config": {
+        "service": "other",
+        "from": "security@huntmasteracademy.com",
+        "host": "smtp.gmail.com",
+        "port": 587,
+        "secure": false,
+        "hasAuth": true
+      },
+      "secrets": {
+        "user": "{{EMAIL_USER}}",
+        "password": "{{EMAIL_PASSWORD}}"
+      }
+    },
+    {
+      "id": "hma-teams-security-alerts",
+      "name": "HMA Security Alerts - Microsoft Teams",
+      "connector_type_id": ".teams",
+      "config": {},
+      "secrets": {
+        "webhookUrl": "{{TEAMS_WEBHOOK_URL}}"
+      }
+    }
+  ],
+  "actions": {
+    "email_high_severity": {
+      "name": "Send High Severity Email Alert",
+      "group": "default",
+      "params": {
+        "to": ["security@huntmasteracademy.com", "devops@huntmasteracademy.com"],
+        "cc": [],
+        "bcc": [],
+        "subject": "🚨 HMA Security Alert [{{rule.severity}}]: {{rule.name}}",
+        "message": "**Security Alert Triggered**\n\n**Rule**: {{rule.name}}\n**Severity**: {{rule.severity}}\n**Risk Score**: {{rule.risk_score}}\n**Time**: {{date}}\n\n**Description**: {{rule.description}}\n\n**Alert Count**: {{state.signals_count}}\n\n**View in Kibana**: {{kibanaBaseUrl}}/app/security/alerts\n\n---\nThis is an automated alert from Hunt Master Academy Security Monitoring."
+      }
+    },
+    "email_medium_severity": {
+      "name": "Send Medium Severity Email Alert",
+      "group": "default",
+      "params": {
+        "to": ["security@huntmasteracademy.com"],
+        "subject": "⚠️ HMA Security Alert [{{rule.severity}}]: {{rule.name}}",
+        "message": "**Security Alert Triggered**\n\n**Rule**: {{rule.name}}\n**Severity**: {{rule.severity}}\n**Risk Score**: {{rule.risk_score}}\n**Time**: {{date}}\n\n**Description**: {{rule.description}}\n\n**Alert Count**: {{state.signals_count}}\n\n**View in Kibana**: {{kibanaBaseUrl}}/app/security/alerts"
+      }
+    },
+    "teams_high_severity": {
+      "name": "Send High Severity Teams Alert",
+      "group": "default",
+      "params": {
+        "message": {
+          "@type": "MessageCard",
+          "@context": "https://schema.org/extensions",
+          "summary": "HMA Security Alert: {{rule.name}}",
+          "themeColor": "FF0000",
+          "title": "🚨 Security Alert [HIGH]: {{rule.name}}",
+          "sections": [
+            {
+              "activityTitle": "Hunt Master Academy Security",
+              "activitySubtitle": "{{date}}",
+              "facts": [
+                {
+                  "name": "Severity",
+                  "value": "{{rule.severity}}"
+                },
+                {
+                  "name": "Risk Score",
+                  "value": "{{rule.risk_score}}"
+                },
+                {
+                  "name": "Alerts",
+                  "value": "{{state.signals_count}}"
+                },
+                {
+                  "name": "Rule",
+                  "value": "{{rule.name}}"
+                }
+              ],
+              "text": "{{rule.description}}"
+            }
+          ],
+          "potentialAction": [
+            {
+              "@type": "OpenUri",
+              "name": "View in Kibana",
+              "targets": [
+                {
+                  "os": "default",
+                  "uri": "{{kibanaBaseUrl}}/app/security/alerts"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "teams_medium_severity": {
+      "name": "Send Medium Severity Teams Alert",
+      "group": "default",
+      "params": {
+        "message": {
+          "@type": "MessageCard",
+          "@context": "https://schema.org/extensions",
+          "summary": "HMA Security Alert: {{rule.name}}",
+          "themeColor": "FFA500",
+          "title": "⚠️ Security Alert [MEDIUM]: {{rule.name}}",
+          "sections": [
+            {
+              "activityTitle": "Hunt Master Academy Security",
+              "activitySubtitle": "{{date}}",
+              "facts": [
+                {
+                  "name": "Severity",
+                  "value": "{{rule.severity}}"
+                },
+                {
+                  "name": "Risk Score",
+                  "value": "{{rule.risk_score}}"
+                },
+                {
+                  "name": "Alerts",
+                  "value": "{{state.signals_count}}"
+                }
+              ],
+              "text": "{{rule.description}}"
+            }
+          ],
+          "potentialAction": [
+            {
+              "@type": "OpenUri",
+              "name": "View Details",
+              "targets": [
+                {
+                  "os": "default",
+                  "uri": "{{kibanaBaseUrl}}/app/security/alerts"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "rule_action_mappings": {
+    "high_severity_rules": [
+      "HMA - Multiple Failed Admin Login Attempts",
+      "HMA - Unauthorized Admin Access Attempt"
+    ],
+    "medium_severity_rules": [
+      "HMA - Failed Authentication Spike",
+      "HMA - Suspicious Credit Manipulation",
+      "HMA - Admin Account Deletion",
+      "HMA - Database Connection Failures",
+      "HMA - High Error Rate on Critical Endpoints"
+    ]
+  }
+}

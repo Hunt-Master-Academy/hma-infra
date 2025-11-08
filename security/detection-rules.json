@@ -1,0 +1,138 @@
+{
+  "rules": [
+    {
+      "name": "HMA - Multiple Failed Admin Login Attempts",
+      "description": "Detects multiple failed login attempts to the admin portal within a short time window, indicating potential brute force attack",
+      "risk_score": 73,
+      "severity": "high",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND transaction.name:\"/api/admin/auth/login\" AND http.response.status_code:401",
+      "interval": "5m",
+      "from": "now-10m",
+      "threshold": {
+        "field": "source.ip",
+        "value": 5
+      },
+      "tags": ["HMA", "Authentication", "Admin Portal", "Brute Force"]
+    },
+    {
+      "name": "HMA - Admin Account Deletion",
+      "description": "Detects when an admin user deletes another user account, requires review for compliance",
+      "risk_score": 47,
+      "severity": "medium",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND transaction.name:(*DELETE* OR *delete*) AND url.path:*/api/admin/users/*",
+      "interval": "5m",
+      "from": "now-15m",
+      "tags": ["HMA", "Admin Actions", "User Management", "Audit"]
+    },
+    {
+      "name": "HMA - Suspicious Credit Manipulation",
+      "description": "Detects large credit adjustments or multiple adjustments in short time, potential abuse",
+      "risk_score": 63,
+      "severity": "medium",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND url.path:*/api/admin/credits/adjust*",
+      "interval": "5m",
+      "from": "now-10m",
+      "threshold": {
+        "field": "user.id",
+        "value": 10
+      },
+      "tags": ["HMA", "Admin Actions", "Credits", "Financial"]
+    },
+    {
+      "name": "HMA - Failed Authentication Spike",
+      "description": "Detects unusual spike in failed authentication across all endpoints",
+      "risk_score": 55,
+      "severity": "medium",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND http.response.status_code:401",
+      "interval": "5m",
+      "from": "now-10m",
+      "threshold": {
+        "field": "source.ip",
+        "value": 20
+      },
+      "tags": ["HMA", "Authentication", "Security", "Anomaly Detection"]
+    },
+    {
+      "name": "HMA - Unauthorized Admin Access Attempt",
+      "description": "Detects 403 Forbidden responses on admin endpoints, indicating privilege escalation attempt",
+      "risk_score": 68,
+      "severity": "high",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND url.path:/api/admin/* AND http.response.status_code:403",
+      "interval": "5m",
+      "from": "now-10m",
+      "tags": ["HMA", "Authorization", "Admin Portal", "Privilege Escalation"]
+    },
+    {
+      "name": "HMA - Subscription Plan Changes",
+      "description": "Monitors admin modifications to subscription plans for audit trail",
+      "risk_score": 21,
+      "severity": "low",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND url.path:*/api/admin/subscription-plans* AND http.request.method:(POST OR PUT OR DELETE)",
+      "interval": "5m",
+      "from": "now-15m",
+      "tags": ["HMA", "Admin Actions", "Subscription", "Audit", "Billing"]
+    },
+    {
+      "name": "HMA - Database Connection Failures",
+      "description": "Detects database connectivity issues that could indicate infrastructure problems",
+      "risk_score": 55,
+      "severity": "medium",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND (message:*database*connection* OR message:*ECONNREFUSED*)",
+      "interval": "5m",
+      "from": "now-10m",
+      "threshold": {
+        "field": "service.name",
+        "value": 5
+      },
+      "tags": ["HMA", "Infrastructure", "Database", "Availability"]
+    },
+    {
+      "name": "HMA - High Error Rate on Critical Endpoints",
+      "description": "Detects elevated 5xx error rates on critical business endpoints",
+      "risk_score": 47,
+      "severity": "medium",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND http.response.status_code:5* AND url.path:(/api/auth/* OR /api/courses/* OR /api/billing/*)",
+      "interval": "5m",
+      "from": "now-10m",
+      "threshold": {
+        "field": "url.path",
+        "value": 10
+      },
+      "tags": ["HMA", "Errors", "Critical Endpoints", "Availability"]
+    },
+    {
+      "name": "HMA - MinIO Storage Access Anomaly",
+      "description": "Detects unusual patterns in MinIO storage access from admin endpoints",
+      "risk_score": 42,
+      "severity": "medium",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND url.path:*/api/admin/storage/* AND http.response.status_code:(403 OR 500)",
+      "interval": "5m",
+      "from": "now-10m",
+      "tags": ["HMA", "Storage", "MinIO", "Admin Actions"]
+    },
+    {
+      "name": "HMA - Slow Transaction Performance",
+      "description": "Detects transactions exceeding performance thresholds, potential DoS or optimization issue",
+      "risk_score": 21,
+      "severity": "low",
+      "type": "query",
+      "query": "service.name:\"hma-academy-brain\" AND transaction.duration.us:>5000000",
+      "interval": "5m",
+      "from": "now-10m",
+      "threshold": {
+        "field": "transaction.name",
+        "value": 5
+      },
+      "tags": ["HMA", "Performance", "APM", "Optimization"]
+    }
+  ]
+}

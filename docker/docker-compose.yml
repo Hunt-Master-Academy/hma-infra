@@ -271,8 +271,23 @@ services:
       # External URLs for browser access (used in embed URLs)
       EXTERNAL_GRAFANA_URL: http://localhost:3003
       EXTERNAL_JAEGER_URL: http://localhost:16686
+      # [20251108-APM-011] Elastic APM configuration
+      ELASTIC_APM_SERVER_URL: http://hma_apm_server:8200
+      ELASTIC_APM_SECRET_TOKEN: ${APM_SECRET_TOKEN:-HMA_APM_Secret_2025}
+      ELASTIC_APM_SERVICE_NAME: hma-academy-brain
+      ELASTIC_APM_ENVIRONMENT: ${NODE_ENV:-development}
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+      ELASTIC_APM_LOG_LEVEL: info
+      # [20251108-ALERTS-016] Alert polling configuration
+      ENABLE_ALERT_POLLING: "true"
+      ELASTICSEARCH_URL: http://hma_elasticsearch:9200
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:-HMA_Elastic_Dev_Pass_2025!}
+      ALERT_POLL_INTERVAL: "60000"
+      MATTERMOST_WEBHOOK_URL: "http://hma_mattermost:8065/hooks/miizizufaib1jxqgi3pggg8nsh"
       # Stripe configuration for test mode (development)
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      # [20251103-BILLING-017] Updated to new Sandbox webhook secret from Stripe CLI v1.21.8
+      STRIPE_WEBHOOK_SECRET: whsec_e545b24fec06a5cf32b94e871b27ed2f87a5d345ed4a9fd8b516ace4c7093af6
       # Subscription tier prices
       STRIPE_PRICE_BASIC: ${STRIPE_PRICE_BASIC}
       STRIPE_PRICE_PRO: ${STRIPE_PRICE_PRO}
@@ -443,6 +458,12 @@ services:
       PORT: 3004
       # Don't override VITE_API_URL - let it use .env value (http://localhost:3004/api)
       # Browser needs localhost for proxy, not internal Docker hostname
+      # [20251108-APM-020] Elastic APM RUM configuration for frontend
+      VITE_APM_SERVER_URL: http://localhost:8201
+      VITE_APM_SERVICE_NAME: hma-academy-web
+      VITE_APM_TRANSACTION_SAMPLE_RATE: "1.0"
+      VITE_APP_VERSION: "1.0.0"
+      VITE_APP_ENV: development
     depends_on:
       hma-academy-api:
         condition: service_healthy
