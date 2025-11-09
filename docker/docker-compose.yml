@@ -372,12 +372,13 @@ services:
       # Preserve container's node_modules and bindings (installed during build)
     networks:
       - hma-network
+    # [20251108-HEALTHCHECK-004] Updated to curl with extended timing for slow startup
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5005/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 45s
+      test: ["CMD-SHELL", "curl -f http://localhost:5005/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
 
   # HMA Event Consumer Worker - Processes events from Redpanda
   hma-event-consumer:
