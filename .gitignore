@@ -78,3 +78,6 @@ k8s/secrets/
 terraform.tfvars
 test_env/
 hma-marksmanship-engine/
+
+# Private keys - never commit
+docker/wazuh-certs/*-key.pem
