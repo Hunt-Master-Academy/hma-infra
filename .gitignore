@@ -81,3 +81,6 @@ hma-marksmanship-engine/
 
 # Private keys - never commit
 docker/wazuh-certs/*-key.pem
+
+# Wazuh certificates - regenerate locally, never commit
+docker/wazuh-certs/*.pem
